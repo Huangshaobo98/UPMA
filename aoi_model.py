@@ -14,7 +14,11 @@ class AoI:
     def get_observation_aoi(self, cur_slot):
         return cur_slot - self.__last_dummy
 
-    def report(self, workers: List[Worker], current_slot):
+    def report_by_uav(self, current_slot):
+        self.__last_dummy = current_slot
+        self.__last_report = current_slot
+
+    def report_by_worker(self, workers: List[Worker], current_slot):
         for worker in workers:
             if rand() < worker.get_honest():
                 self.__last_report = current_slot

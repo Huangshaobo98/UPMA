@@ -55,6 +55,22 @@ class Cell:
 
         axis.plot(x_val, y_val, color='k', linewidth=1)
 
+    def uav_visited(self, current_slot):
+        for sensor in self.__sensors:
+            sensor.report_by_uav(current_slot)
+
+    def get_observation_aoi(self, current_slot):
+        ret = 0.0
+        for sensor in self.__sensors:
+            ret += sensor.get_observation_aoi(self, current_slot)
+        return ret
+
+    def get_real_aoi(self, current_slot):
+        ret = 0.0
+        for sensor in self.__sensors:
+            ret += sensor.get_real_aoi(self, current_slot)
+        return ret
+
 
 def uniform_generator(seed=10):
     random.seed(seed)

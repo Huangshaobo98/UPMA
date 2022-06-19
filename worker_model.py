@@ -42,7 +42,7 @@ class WorkerBase:
         return self.__trust
 
     def get_location(self):
-        return self.__x, self.__y
+        return [self.__x, self.__y]
 
 
 class Worker(WorkerBase):
@@ -80,17 +80,29 @@ class UAV(WorkerBase):
     def __init__(self, x_start, y_start):
         super(UAV, self).__init__(x_start, y_start, 1.0, False)
         g = Global()
-        self.__energy = g["uav_energy"]
+        self.__max_energy = g["uav_energy"]
+        self.__energy = self.__max_energy
+        self.__charge_cells = g["charge_cells"]
+        self.__slot_step_for_charge = 4     #用于表示充电所耗费的时隙数量
 
     def action(self, dx_dy):
-        prev = self.get_location()
-        super(UAV, self).action(dx_dy)
-        new = self.get_location()
+        prev_location = self.get_location()
+        prev_energy = self.get_energy()
+        if dx_dy == [0, 0] and prev_location in self.__charge_cells:
+            self.__charge()
+            return prev_location, prev_location, prev_energy, self.__max_energy, self.__slot_step_for_charge
 
-        if prev == new:
-            self.__energy -= Energy.hover_energy_cost()
+        super(UAV, self).action(dx_dy)
+        new_location = self.get_location()
+        if prev_location == new_location:
+            self.__energy -= Energy.hover_energy_cost()     # 到达了边界无法移动，仅能进行悬浮操作
         else:
             self.__energy -= Energy.move_energy_cost()
+        new_energy = self.get_energy()
+        return prev_location, new_energy, prev_energy, new_energy, 1
 
     def get_energy(self):
         return self.__energy
+
+    def __charge(self):
+        self.__energy = self.__max_energy

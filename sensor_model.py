@@ -1,5 +1,6 @@
 from aoi_model import AoI
-
+from worker_model import Worker
+from typing import List
 
 class Sensor:
     __location_x = []
@@ -26,6 +27,12 @@ class Sensor:
 
     def get_position(self):
         return self.__x, self.__y
+
+    def report_by_uav(self, current_slot):
+        self.__aoi.report_by_uav(current_slot)
+
+    def report_by_workers(self, workers: List[Worker], current_slot):
+        self.__aoi.report_by_worker(workers, current_slot)
 
     @staticmethod
     def get_all_locations():

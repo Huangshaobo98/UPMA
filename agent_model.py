@@ -27,6 +27,7 @@ EPISODES = 5000
 class DQNAgent:
     def __init__(self, cell_size, action_size, gamma=0.9, epsilon=1, epsilon_decay=0.999,
                  epsilon_min=0.01, lr=0.001, dueling=True):
+        # 暂且设定的动作集合：'h': 六个方向的单元移动+一种什么都不做的悬浮，在特定小区的悬浮可以看做是进行了充电操作
         self.cell_size = cell_size
         self.action_size = action_size
         self.memory = deque(maxlen=20000)  # 创建双端队列
@@ -51,8 +52,9 @@ class DQNAgent:
 
     def _build_model(self, dueling):
         # Neural Net for Deep-Q learning Model
-        InputA = Input(shape=(self.cell_size, self.cell_size))
-        InputB = Input(shape=(2, self.cell_size))
+        InputA = Input(shape=(self.cell_size, self.cell_size)) # 观测AoI状态
+        InputB = Input(shape=(2, self.cell_size))                    # 无人机坐标点
+        InputC = Input(shape=(1,))                                              # 能量模型，一维数值
 
         # x = Conv2D(6, (3, 3), padding='same', activation='linear')(InputA)
         x = Flatten()(InputA)
@@ -64,19 +66,23 @@ class DQNAgent:
         # y = Dense(64, activation='linear')(InputB)
         y = Flatten()(InputB)
         y = Model(inputs=InputB, outputs=y)
-        combined = K.concatenate([x.output, y.output])
+
+        z = Flatten()(InputC)
+        z = Model(inputs=InputC, outputs=z)
+
+        combined = K.concatenate([x.output, y.output, z.outputs])
 
         # model.add(Dense(128, input_dim=self.state_size, activation='relu'))
-        z = Dense(256, activation='relu')(combined)
-        z = Dense(256, activation='relu')(z)
-        z = Dense(128, activation='relu')(z)
-        z = Dense(64, activation='relu')(z)
+        o = Dense(256, activation='relu')(combined)
+        o = Dense(256, activation='relu')(o)
+        o = Dense(128, activation='relu')(o)
+        o = Dense(64, activation='relu')(o)
         # z = Dense(, activation='relu')(z)
         if dueling:
-            z = Dense(self.action_size + 1, activation='linear')(z)
-            z = Lambda(lambda i: K.expand_dims(i[:,0],-1) + i[:,1:] - K.mean(i[:,1:], keepdims=True), output_shape=(self.action_size,))(z)
+            o = Dense(self.action_size + 1, activation='linear')(o)
+            o = Lambda(lambda i: K.expand_dims(i[:,0],-1) + i[:,1:] - K.mean(i[:,1:], keepdims=True), output_shape=(self.action_size,))(o)
         else:
-            z = Dense(self.action_size, activation='linear')(z)
+            o = Dense(self.action_size, activation='linear')(o)
 
         model = Model(inputs=[x.input, y.input], outputs=z)
         model.compile(loss=self.huber_loss, optimizer=Adam(lr=self.learning_rate))
