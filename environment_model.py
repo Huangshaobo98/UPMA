@@ -1,53 +1,176 @@
 from cell_model import uniform_generator
-from worker_model import UAV, Worker
+from worker_model import UAV, Worker, MobilePolicy
 from random import randint
 from global_ import Global
-from math import sqrt
+from agent_model import DQNAgent
+import numpy as np
+from energy_model import Energy
+from persistent_model import Persistent
+import os
 
 class Environment:
     def __init__(self):
         g = Global()
-        x_limit = g["x_limit"]
-        y_limit = g["y_limit"]
+        self.__cell_limit = g["cell_limit"]
         worker_number = g["worker_number"]
-        self.__uav = UAV(randint(0, x_limit), randint(0, y_limit))
+        self.__uav = UAV(randint(0,  self.__cell_limit - 1), randint(0,  self.__cell_limit - 1))
         self.__cell = uniform_generator()
-        self.__worker = [Worker(randint(0, x_limit), randint(0, y_limit)) for _ in range(worker_number)]
-        self.__sec_per_slot = g["cell_length"] * sqrt(3) / g["uav_speed"] if g["map_style"] == 'h' else g["cell_length"] / g["uav_speed"]
+        self.__sensor_number= g["sensor_number"]
+        self.__worker = [Worker(randint(0,  self.__cell_limit - 1), randint(0,  self.__cell_limit - 1)) for _ in range(worker_number)]
+        self.__sec_per_slot = self.__uav.get_second_per_slot()
+        self.__slot_for_charge = self.__uav.get_charge_slot()
+        self.__charge_slot = 0
+        action_size = 7 if g["map_style"] == 'h' else 5
+        self.__agent = DQNAgent(self.__cell_limit, action_size, )
+        self.__current_slot = 0
+        self.__sum_slot = 0
+        self.__max_slot = g["max_slot"]
+        self.__punish = g["punish"]
+        self.__batch_size = g["batch_size"]
+        self.__episode = 0
+        self.__max_episode = g["max_eposide"]
+        self.__initial_trust = g["initial_trust"]
+        self.__persistent = Persistent()
+        Energy.init()
 
-    def get_cell_observation_aoi(self, current_slot):
-        ret = []
-        for Rows in self.__cell:
-            ret_row = []
-            for cell in Rows:
-                ret_row.append(cell.get_observation_aoi(current_slot))
-            ret.append(ret_row)
+    def get_cell_observation_aoi(self, curret_slot):
+        ret = np.empty((self.__cell_limit, self.__cell_limit), dtype=np.float64)
+        for x in range(self.__cell_limit):
+            for y in range(self.__cell_limit):
+                ret[x][y] = self.__cell[x][y].get_observation_aoi(curret_slot)
         return ret
 
-    def get_cell_real_aoi(self, current_slot):
-        ret = []
-        for Rows in self.__cell:
-            ret_row = []
-            for cell in Rows:
-                ret_row.append(cell.get_real_aoi(current_slot))
-            ret.append(ret_row)
+    def get_cell_real_aoi(self, curret_slot):
+        ret = np.empty((self.__cell_limit, self.__cell_limit), dtype=np.float64)
+        for x in range(self.__cell_limit):
+            for y in range(self.__cell_limit):
+                ret[x][y] = self.__cell[x][y].get_real_aoi(curret_slot)
         return ret
 
-    def uav_step(self, uav_action, current_slot):
+    def get_analyze(self):
+        cell_aois = sum(sum(self.get_cell_real_aoi(self.__current_slot)))
+        uav_location = self.get_position_state()
+        return cell_aois, uav_location
+
+    def get_uav_energy_state(self):
+        ret = np.empty((1,), dtype=np.float64)
+        ret[0] = self.__uav.get_energy()
+        return ret
+
+    def get_position_state(self):
+        dx_dy = self.__uav.get_location()
+        return np.array(dx_dy)
+
+    def get_energy(self):
+        return np.array([self.__uav.get_energy()])
+
+    def uav_step(self, train):
         # 返回: 观测aoi状态，实际aoi状态，当前无人机所在小区
-        prev_observation_aoi = self.get_cell_observation_aoi(current_slot)
-        prev_real_aoi = self.get_cell_real_aoi(current_slot)
-        [prev_location, next_location, prev_energy, next_energy, slot_cost] = self.__uav.action(uav_action) # 对无人机的状态进行更新
+        prev_observation_aoi = self.get_cell_observation_aoi(self.__current_slot)
+        prev_real_aoi = self.get_cell_real_aoi(self.__current_slot)
+        prev_position = self.get_position_state()
+        prev_energy = self.get_energy()
+
+        uav_action_index = self.__agent.act(prev_real_aoi, prev_observation_aoi, prev_position,
+                                            self.get_uav_energy_state(), train)
+
+        uav_action = MobilePolicy.get_action(uav_action_index)
+        charge_state = self.__uav.action(uav_action) # 对无人机的状态进行更新
+
+        if charge_state:
+            self.__charge_slot = self.__slot_for_charge
+
+        next_position = self.get_position_state()
+        self.__cell[next_position[0]][next_position[1]].uav_visited(self.__current_slot)
+
+        next_observation_aoi = self.get_cell_observation_aoi(self.__current_slot)
+        next_real_aoi = self.get_cell_real_aoi(self.__current_slot)
+        next_energy = self.get_energy()
+
+        punish = self.__punish if next_energy <= 0 else 0
+
+        reward = - (sum(sum(next_real_aoi)) / self.__sensor_number) - punish
         # 这里虽然无人机可能会花费几个slot来换电池，但是我们对于模型的预测仍然采用下一个时隙的结果进行预测
-        self.__cell[next_location].uav_visited(current_slot)
 
-        next_observation_aoi = self.get_cell_observation_aoi(current_slot)
-        next_real_aoi = self.get_cell_real_aoi(current_slot)
+        return prev_observation_aoi, next_observation_aoi, prev_real_aoi, next_real_aoi, prev_position, next_position, prev_energy, next_energy, reward, uav_action_index
 
-        return prev_observation_aoi, next_observation_aoi, prev_real_aoi, next_real_aoi, prev_location, next_location, prev_energy, next_energy, slot_cost
+    def workers_step(self):
+        cell_pos_to_refresh = set()
+        for worker in self.__worker:
+            [x, y] = worker.move()
+            if worker.work(self.__cell[x][y]):
+                cell_pos_to_refresh.add((x, y))
+        for tup in cell_pos_to_refresh:
+            self.__cell[tup[0]][tup[1]].worker_visited(self.__current_slot)
 
-    def workers_step(self, current_slot):
-        pass
+    def worker_trust_refresh(self):
+        for work in self.__worker:
+            work.update_trust()
+
+    def slot_step_train(self):
+        self.workers_step()                 # worker先行移动
+        done = False
+        if self.__charge_slot <= 0:     # 不充电时无人机进行步进，否则只允许车辆进行步进
+            [prev_observation_aoi, next_observation_aoi, prev_real_aoi, next_real_aoi, prev_position, next_position, prev_energy, next_energy, reward, uav_action_index] = self.uav_step(True)
+            if next_energy < 0 or self.__current_slot == self.__max_slot:
+                done = True
+            self.__agent.memorize(prev_observation_aoi, next_observation_aoi, prev_real_aoi, next_real_aoi, prev_position,
+                                next_position, prev_energy, next_energy, reward, uav_action_index, done)
+            obv_aoi = next_observation_aoi
+            real_aoi = next_real_aoi
+            uav_pos = next_position
+            energy = next_energy
+            reward = reward
+        else:
+            obv_aoi = self.get_cell_observation_aoi(self.__current_slot)
+            real_aoi = self.get_cell_real_aoi(self.__current_slot)
+            uav_pos = self.get_position_state()
+            energy = self.get_energy()
+            reward = 0
+
+        self.__persistent.print_slot_verbose_1(self.__episode, self.__current_slot, real_aoi,
+                                                   obv_aoi, uav_pos, reward, energy)
+
+        self.worker_trust_refresh()     # worker信任刷新
+        self.__charge_slot -= 1
+        if self.__sum_slot % 100 == 0:
+            self.__agent.update_target_model()
+
+        if len(self.__agent.memory) > self.__batch_size:
+            self.__agent.replay(self.__batch_size)
+
+        return done
+
+
+    def clear(self):
+        # 刷新状态，重新开始
+        for row in self.__cell:
+            for item in row:
+                item.clear()
+        for work in self.__worker:
+            work.clear(randint(0,  self.__cell_limit - 1), randint(0,  self.__cell_limit - 1), self.__initial_trust)
+        self.__uav.clear(randint(0,  self.__cell_limit - 1), randint(0,  self.__cell_limit - 1))
+
+    def eposide_step(self):
+        for slot in range(1, self.__max_slot + 1):
+            self.__current_slot = slot
+            self.__sum_slot += 1
+            if self.slot_step_train():
+                break
+        self.clear()
+
+        model_path = os.getcwd() + "\\model.h5"
+        self.__agent.save(model_path)
+
+    def start(self):
+        for episode in range(1, self.__max_episode + 1):
+            self.__episode = episode
+            self.eposide_step()
+
+
+
+
+
 
 
 

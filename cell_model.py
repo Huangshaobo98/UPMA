@@ -18,7 +18,10 @@ class Cell:
             self.__x_location = self.__length * self.__x
             self.__y_location = self.__length * self.__y
         self.__sensors = []
-        self.__worker_collection_state = {}
+
+    def clear(self):
+        for sensor in self.__sensors:
+            sensor.clear()
 
     def add_sensor(self, sensor):
         self.__sensors.append(sensor)
@@ -38,6 +41,9 @@ class Cell:
             x.append(xt)
             y.append(yt)
         return x, y
+
+    def get_sensors(self):
+        return  self.__sensors
 
     def plot_cell(self, axis):
         if self.__map_style == 'h':
@@ -59,16 +65,21 @@ class Cell:
         for sensor in self.__sensors:
             sensor.report_by_uav(current_slot)
 
+    def worker_visited(self, current_slot):
+        # 刷新状态，用于车辆访问的情况
+        for sensor in self.__sensors:
+            sensor.report_by_workers(current_slot)
+
     def get_observation_aoi(self, current_slot):
         ret = 0.0
         for sensor in self.__sensors:
-            ret += sensor.get_observation_aoi(self, current_slot)
+            ret += sensor.get_observation_aoi(current_slot)
         return ret
 
     def get_real_aoi(self, current_slot):
         ret = 0.0
         for sensor in self.__sensors:
-            ret += sensor.get_real_aoi(self, current_slot)
+            ret += sensor.get_real_aoi(current_slot)
         return ret
 
 
@@ -76,15 +87,14 @@ def uniform_generator(seed=10):
     random.seed(seed)
     ret_cell = []
     g = Global()
-    x_limit = g["x_limit"]
-    y_limit = g["y_limit"]
+    cell_limit = g["cell_limit"]
     cell_length = g["cell_length"]
     sensor_number = g["sensor_number"]
     map_style = g["map_style"]
-    for x in range(x_limit):
-        ret_cell.append([Cell(x, y) for y in range(y_limit)])
-    sensor_cell_x = [random.randint(0, x_limit - 1) for _ in range(sensor_number)]
-    sensor_cell_y = [random.randint(0, y_limit - 1) for _ in range(sensor_number)]
+    for x in range(cell_limit):
+        ret_cell.append([Cell(x, y) for y in range(cell_limit)])
+    sensor_cell_x = [random.randint(0, cell_limit - 1) for _ in range(sensor_number)]
+    sensor_cell_y = [random.randint(0, cell_limit - 1) for _ in range(sensor_number)]
 
     r3 = sqrt(3)
     if map_style == 'g':

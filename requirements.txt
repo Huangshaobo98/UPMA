@@ -1,0 +1,4 @@
+keras==2.9.0
+keras_nightly==2.5.0.dev2021032900
+matplotlib==3.3.0
+numpy==1.23.0

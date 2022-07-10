@@ -16,7 +16,6 @@ from keras.engine.training import Model
 import keras.backend as K
 
 # from time import time
-import numpy.random.rand as rand
 
 # from keras.callbacks import TensorBoard
 # from keras.utils.vis_utils import plot_model
@@ -70,7 +69,7 @@ class DQNAgent:
         z = Flatten()(InputC)
         z = Model(inputs=InputC, outputs=z)
 
-        combined = K.concatenate([x.output, y.output, z.outputs])
+        combined = K.concatenate([x.output, y.output, z.output])
 
         # model.add(Dense(128, input_dim=self.state_size, activation='relu'))
         o = Dense(256, activation='relu')(combined)
@@ -84,8 +83,8 @@ class DQNAgent:
         else:
             o = Dense(self.action_size, activation='linear')(o)
 
-        model = Model(inputs=[x.input, y.input], outputs=z)
-        model.compile(loss=self.huber_loss, optimizer=Adam(lr=self.learning_rate))
+        model = Model(inputs=[x.input, y.input, z.input], outputs=o)
+        model.compile(loss=self.huber_loss, optimizer=Adam(learning_rate=self.learning_rate))
         # plot_model(model, to_file='Flatten.png', show_shapes=True)
         return model
 
@@ -93,39 +92,48 @@ class DQNAgent:
         # copy weights from model to target_model
         self.target_model.set_weights(self.model.get_weights())
 
-    def memorize(self, AoI_state, position_state, action, reward, next_AoI_state, next_position_state, done):
-        new_pos_state = self.transform(position_state)
-        new_next_pos_state = self.transform(next_position_state)
-        self.memory.append((AoI_state, new_pos_state, action, reward, next_AoI_state, new_next_pos_state, done))
+    def memorize(self, prev_observation_aoi, next_observation_aoi, prev_real_aoi, next_real_aoi, prev_position, next_position, prev_energy, next_energy, reward, action, done):
+        prev_pos_state = self.transform(prev_position)
+        next_pos_state = self.transform(next_position)
+        self.memory.append((prev_observation_aoi, next_observation_aoi, prev_real_aoi, next_real_aoi, prev_pos_state, next_pos_state, prev_energy, next_energy, reward, action, done))
 
-    def act(self, AoI_state, positions):
-        if rand() <= self.epsilon:
-            return random.randrange(self.action_size)
-        new_pos_state = self.transform(positions)
-        act_values = self.model.predict([AoI_state[np.newaxis, :, :], new_pos_state[np.newaxis, :, :]], batch_size=1)
+    def act(self, real_aoI_state, observation_aoi_state, position_state, energy_state, predict_by_real: bool):
+        pos_state = self.transform(position_state)
+        if predict_by_real:
+            if np.random.rand() <= self.epsilon:
+                return random.randrange(self.action_size)
+            act_values = self.model.predict([real_aoI_state[np.newaxis, :, :], pos_state[np.newaxis, :, :], energy_state[np.newaxis, :]], batch_size=1, verbose=0)
+        else:
+            act_values = self.model.predict([observation_aoi_state[np.newaxis, :, :], pos_state[np.newaxis, :, :], energy_state[np.newaxis, :]], batch_size=1, verbose=0)
         return np.argmax(act_values[0])  # returns action
 
     def replay(self, batch_size):
 
-        minibatch = np.array(random.sample(self.memory, batch_size))
+        minibatch = np.array(random.sample(self.memory, batch_size), dtype=object)
 
-        AoI_states = np.stack(minibatch[:, 0])
-        position_states = np.stack(minibatch[:, 1])
+        prev_real_aoi_states = np.stack(minibatch[:, 2])
+        next_real_aoi_states = np.stack(minibatch[:, 3])
 
-        next_AoI_states = np.stack(minibatch[:, 4])
+        prev_observation_aoi = np.stack(minibatch[:, 0])
+        next_observation_aoi = np.stack(minibatch[:, 1])
+
+        prev_position_states = np.stack(minibatch[:, 4])
         next_position_states = np.stack(minibatch[:, 5])
 
-        next_targets = self.model.predict([next_AoI_states, next_position_states], batch_size=batch_size)
-        targets = self.model.predict([AoI_states, position_states], batch_size=batch_size)
+        prev_energy = np.stack(minibatch[:, 6])
+        next_energy = np.stack(minibatch[:, 7])
 
-        done = np.stack(minibatch[:, 6])
-        reward = np.stack(minibatch[:, 3])
-        action = np.stack(minibatch[:, 2])
+        next_targets = self.model.predict([next_real_aoi_states, next_position_states, next_energy], batch_size=batch_size, verbose=0)
+        targets = self.model.predict([prev_real_aoi_states, prev_position_states, prev_energy], batch_size=batch_size, verbose=0)
+        done = np.stack(minibatch[:, 10])
+
+        reward = np.stack(minibatch[:, 8])
+        action = np.stack(minibatch[:, 9])
 
         targets[done, action[done]] = reward[done]
         targets[range(batch_size), action] = reward + self.gamma * np.amax(next_targets, axis=1).reshape(reward.shape)
 
-        self.model.fit([AoI_states, position_states], targets, epochs=1, batch_size=batch_size, verbose=0)
+        self.model.fit([prev_real_aoi_states, prev_position_states, prev_energy], targets, epochs=1, batch_size=batch_size, verbose=0)
 
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
