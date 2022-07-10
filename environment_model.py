@@ -32,7 +32,7 @@ class Environment:
         self.__max_episode = g["max_eposide"]
         self.__initial_trust = g["initial_trust"]
         self.__persistent = Persistent()
-        self.__title = os.getcwd() + "\\save\\cell_" + str(self.__cell_limit)
+        self.__title = os.getcwd() + "/save/cell_" + str(self.__cell_limit)
         if not os.path.exists(self.__title):
             os.makedirs(self.__title)
         self.__logger = logging.getLogger("Root")
@@ -41,7 +41,7 @@ class Environment:
 
     def log_config(self):
         self.__logger.setLevel(logging.DEBUG)
-        fh = logging.FileHandler(self.__title + "\\running.log")
+        fh = logging.FileHandler(self.__title + "/running.log")
         fh.setLevel(logging.DEBUG)
         fh.setFormatter(logging.Formatter("%(message)s"))
         self.__logger.addHandler(fh)
@@ -171,7 +171,7 @@ class Environment:
                 break
         self.clear()
 
-        model_path = self.__title + "\\model.h5"
+        model_path = self.__title + "/model.h5"
         self.__agent.save(model_path)
 
     def start(self):
