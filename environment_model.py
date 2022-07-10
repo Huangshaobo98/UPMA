@@ -6,6 +6,7 @@ from agent_model import DQNAgent
 import numpy as np
 from energy_model import Energy
 from persistent_model import Persistent
+import logging
 import os
 
 class Environment:
@@ -31,7 +32,19 @@ class Environment:
         self.__max_episode = g["max_eposide"]
         self.__initial_trust = g["initial_trust"]
         self.__persistent = Persistent()
+        self.__title = os.getcwd() + "\\save\\cell_" + str(self.__cell_limit)
+        if not os.path.exists(self.__title):
+            os.makedirs(self.__title)
+        self.__logger = logging.getLogger("Root")
+        self.log_config()
         Energy.init()
+
+    def log_config(self):
+        self.__logger.setLevel(logging.DEBUG)
+        fh = logging.FileHandler(self.__title + "\\running.log")
+        fh.setLevel(logging.DEBUG)
+        fh.setFormatter(logging.Formatter("%(message)s"))
+        self.__logger.addHandler(fh)
 
     def get_cell_observation_aoi(self, curret_slot):
         ret = np.empty((self.__cell_limit, self.__cell_limit), dtype=np.float64)
@@ -127,7 +140,7 @@ class Environment:
             energy = self.get_uav_energy_state()
             reward = 0
 
-        self.__persistent.print_slot_verbose_1(self.__episode, self.__current_slot, real_aoi,
+        self.__persistent.print_slot_verbose_1(self.__logger, self.__episode, self.__current_slot, real_aoi,
                                                    obv_aoi, uav_pos, reward, energy, self.__agent.epsilon)
 
         self.worker_trust_refresh()     # worker信任刷新
@@ -158,7 +171,7 @@ class Environment:
                 break
         self.clear()
 
-        model_path = os.getcwd() + "\\model.h5"
+        model_path = self.__title + "\\model.h5"
         self.__agent.save(model_path)
 
     def start(self):
