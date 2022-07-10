@@ -112,8 +112,8 @@ class UAV(WorkerBase):
     def __init__(self, x_start, y_start):
         super(UAV, self).__init__(x_start, y_start, 1.0, False)
         g = Global()
-        self._max_energy = g["uav_energy"]
-        self._energy = self._max_energy
+        self.max_energy = g["uav_energy"]
+        self._energy = self.max_energy
         self._charge_cells = g["charge_cells"]
         self._slot_step_for_charge = 4     #用于表示充电所耗费的时隙数量
         self._sec_per_slot = g["cell_length"] * sqrt(3) / g["uav_speed"] \
@@ -138,10 +138,10 @@ class UAV(WorkerBase):
         return self._energy
 
     def __charge(self):
-        self._energy = self._max_energy
+        self._energy = self.max_energy
 
     def clear(self, x_start, y_start):
-        self._energy = self._max_energy
+        self._energy = self.max_energy
         self._x = x_start
         self._y = y_start
 

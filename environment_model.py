@@ -56,25 +56,22 @@ class Environment:
 
     def get_uav_energy_state(self):
         ret = np.empty((1,), dtype=np.float64)
-        ret[0] = self.__uav.get_energy()
+        ret[0] = self.__uav.get_energy() / self.__uav.max_energy
         return ret
 
     def get_position_state(self):
         dx_dy = self.__uav.get_location()
         return np.array(dx_dy)
 
-    def get_energy(self):
-        return np.array([self.__uav.get_energy()])
-
     def uav_step(self, train):
         # 返回: 观测aoi状态，实际aoi状态，当前无人机所在小区
         prev_observation_aoi = self.get_cell_observation_aoi(self.__current_slot)
         prev_real_aoi = self.get_cell_real_aoi(self.__current_slot)
         prev_position = self.get_position_state()
-        prev_energy = self.get_energy()
+        prev_energy = self.get_uav_energy_state()
 
         uav_action_index = self.__agent.act(prev_real_aoi, prev_observation_aoi, prev_position,
-                                            self.get_uav_energy_state(), train)
+                                            prev_energy, train)
 
         uav_action = MobilePolicy.get_action(uav_action_index)
         charge_state = self.__uav.action(uav_action) # 对无人机的状态进行更新
@@ -87,7 +84,7 @@ class Environment:
 
         next_observation_aoi = self.get_cell_observation_aoi(self.__current_slot)
         next_real_aoi = self.get_cell_real_aoi(self.__current_slot)
-        next_energy = self.get_energy()
+        next_energy = self.get_uav_energy_state()
 
         punish = self.__punish if next_energy <= 0 else 0
 
@@ -127,7 +124,7 @@ class Environment:
             obv_aoi = self.get_cell_observation_aoi(self.__current_slot)
             real_aoi = self.get_cell_real_aoi(self.__current_slot)
             uav_pos = self.get_position_state()
-            energy = self.get_energy()
+            energy = self.get_uav_energy_state()
             reward = 0
 
         self.__persistent.print_slot_verbose_1(self.__episode, self.__current_slot, real_aoi,
