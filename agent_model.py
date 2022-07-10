@@ -24,7 +24,7 @@ EPISODES = 5000
 
 
 class DQNAgent:
-    def __init__(self, cell_size, action_size, gamma=0.9, epsilon=1, epsilon_decay=0.999,
+    def __init__(self, cell_size, action_size, gamma=0.9, epsilon=1, epsilon_decay=0.9999,
                  epsilon_min=0.01, lr=0.001, dueling=True):
         # 暂且设定的动作集合：'h': 六个方向的单元移动+一种什么都不做的悬浮，在特定小区的悬浮可以看做是进行了充电操作
         self.cell_size = cell_size

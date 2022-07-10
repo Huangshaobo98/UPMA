@@ -38,6 +38,7 @@ class Environment:
         for x in range(self.__cell_limit):
             for y in range(self.__cell_limit):
                 ret[x][y] = self.__cell[x][y].get_observation_aoi(curret_slot)
+        ret /= self.__sensor_number
         return ret
 
     def get_cell_real_aoi(self, curret_slot):
@@ -45,6 +46,7 @@ class Environment:
         for x in range(self.__cell_limit):
             for y in range(self.__cell_limit):
                 ret[x][y] = self.__cell[x][y].get_real_aoi(curret_slot)
+        ret /= self.__sensor_number
         return ret
 
     def get_analyze(self):
@@ -89,7 +91,7 @@ class Environment:
 
         punish = self.__punish if next_energy <= 0 else 0
 
-        reward = - (sum(sum(next_real_aoi)) / self.__sensor_number) - punish
+        reward = - np.sum(next_real_aoi) - punish
         # 这里虽然无人机可能会花费几个slot来换电池，但是我们对于模型的预测仍然采用下一个时隙的结果进行预测
 
         return prev_observation_aoi, next_observation_aoi, prev_real_aoi, next_real_aoi, prev_position, next_position, prev_energy, next_energy, reward, uav_action_index
@@ -129,7 +131,7 @@ class Environment:
             reward = 0
 
         self.__persistent.print_slot_verbose_1(self.__episode, self.__current_slot, real_aoi,
-                                                   obv_aoi, uav_pos, reward, energy)
+                                                   obv_aoi, uav_pos, reward, energy, self.__agent.epsilon)
 
         self.worker_trust_refresh()     # worker信任刷新
         self.__charge_slot -= 1
