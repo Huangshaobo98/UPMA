@@ -10,7 +10,7 @@ import logging
 import os
 
 class Environment:
-    def __init__(self):
+    def __init__(self, console_enable, delete_model, delete_log):
         g = Global()
         self.__cell_limit = g["cell_limit"]
         worker_number = g["worker_number"]
@@ -34,17 +34,31 @@ class Environment:
         self.__initial_trust = g["initial_trust"]
         self.__persistent = Persistent()
         self.__title = os.getcwd() + "/save/cell_" + str(self.__cell_limit)
+        self.__model_path = self.__title + "/model.h5"
+        self.__log_path = self.__title + "/running.log"
         if not os.path.exists(self.__title):
             os.makedirs(self.__title)
+        if delete_model:
+            if os.path.exists(self.__model_path):
+                os.remove(self.__model_path)
+        if delete_log:
+            if os.path.exists(self.__log_path):
+                os.remove(self.__log_path)
+
         self.__logger = logging.getLogger("Root")
-        self.log_config()
+        self.log_config(console_enable)
         Energy.init()
 
-    def log_config(self):
+    def log_config(self, console_enable):
         self.__logger.setLevel(logging.DEBUG)
         fh = logging.FileHandler(self.__title + "/running.log")
         fh.setLevel(logging.DEBUG)
         fh.setFormatter(logging.Formatter("%(message)s"))
+        if console_enable:
+            ch = logging.StreamHandler()
+            ch.setLevel(logging.DEBUG)
+            ch.setFormatter(logging.Formatter("%(message)s"))
+            self.__logger.addHandler(ch)
         self.__logger.addHandler(fh)
 
     def get_cell_observation_aoi(self, curret_slot):
@@ -175,9 +189,7 @@ class Environment:
             if self.slot_step_train():
                 break
         self.clear()
-
-        model_path = self.__title + "/model.h5"
-        self.__agent.save(model_path)
+        self.__agent.save(self.__model_path)
 
     def start(self):
         for episode in range(1, self.__max_episode + 1):

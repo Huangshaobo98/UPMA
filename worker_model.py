@@ -118,7 +118,8 @@ class UAV(WorkerBase):
         self._slot_step_for_charge = 4     #用于表示充电所耗费的时隙数量
         self._sec_per_slot = g["cell_length"] * sqrt(3) / g["uav_speed"] \
             if g["map_style"] == 'h' else g["cell_length"] / g["uav_speed"]
-        self._slot_for_charge = ceil(g["charge_time"] / self._sec_per_slot)
+        self._slot_for_charge = 1
+        # ceil(g["charge_time"] / self._sec_per_slot)
 
     def action(self, dx_dy):
         prev_location = self.get_location()

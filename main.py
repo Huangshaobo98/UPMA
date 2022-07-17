@@ -2,7 +2,7 @@ from global_ import Global
 from cell_model import uniform_generator
 from energy_model import Energy
 from environment_model import Environment
-
+import sys
 def global_init():
     g = {
         "map_style": 'h',                       # 地图类型h: 六边形 g: 栅格
@@ -34,5 +34,20 @@ def global_init():
 
 if __name__ == '__main__':
     Global.init(global_init())
-    env = Environment()
+    commands = sys.argv[1:]
+    console_enable = False
+    delete_model = True
+    delete_log = True
+    for item in commands:
+        if item == "--log":
+            console_enable = True
+            continue
+        if item == "--dm":
+            delete_model = True
+            continue
+        if item == "--dl":
+            delete_log = True
+            continue
+
+    env = Environment(console_enable, delete_model, delete_log)
     env.start()
