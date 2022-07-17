@@ -72,7 +72,10 @@ class DQNAgent:
         combined = K.concatenate([x.output, y.output, z.output])
 
         # model.add(Dense(128, input_dim=self.state_size, activation='relu'))
-        o = Dense(256, activation='relu')(combined)
+        o = Dense(1024, activation='relu')(combined)
+        o = Dense(1024, activation='relu')(o)
+        o = Dense(512, activation='relu')(o)
+        o = Dense(256, activation='relu')(o)
         o = Dense(256, activation='relu')(o)
         o = Dense(128, activation='relu')(o)
         o = Dense(64, activation='relu')(o)

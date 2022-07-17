@@ -20,8 +20,9 @@ def global_init():
         "batch_size": 256,
         "eposide": 2000,
         "charge_time": 60,
-        "max_eposide": 500,
-        "initial_trust": 0.5
+        "max_eposide": 1000,
+        "initial_trust": 0.5,
+        "hover_punish": 10
     }
     if g["cell_limit"] == 6:
         g["charge_cells"] = [[1, 1], [4, 4], [1, 4], [4, 1]]

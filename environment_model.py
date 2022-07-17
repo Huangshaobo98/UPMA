@@ -27,6 +27,7 @@ class Environment:
         self.__sum_slot = 0
         self.__max_slot = g["max_slot"]
         self.__punish = g["punish"]
+        self.__hover_punish = g["hover_punish"]
         self.__batch_size = g["batch_size"]
         self.__episode = 0
         self.__max_episode = g["max_eposide"]
@@ -89,10 +90,13 @@ class Environment:
         uav_action = MobilePolicy.get_action(uav_action_index)
         charge_state = self.__uav.action(uav_action) # 对无人机的状态进行更新
 
+        next_position = self.get_position_state()
+
+        hover = True if (prev_position == next_position).all() else False
         if charge_state:
             self.__charge_slot = self.__slot_for_charge
+            hover = False
 
-        next_position = self.get_position_state()
         self.__cell[next_position[0]][next_position[1]].uav_visited(self.__current_slot)
 
         next_observation_aoi = self.get_cell_observation_aoi(self.__current_slot)
@@ -101,7 +105,8 @@ class Environment:
 
         punish = self.__punish if next_energy <= 0 else 0
 
-        reward = - np.sum(next_real_aoi) - punish
+        reward = - np.sum(next_real_aoi) - punish - self.__hover_punish * hover
+
         # 这里虽然无人机可能会花费几个slot来换电池，但是我们对于模型的预测仍然采用下一个时隙的结果进行预测
 
         return prev_observation_aoi, next_observation_aoi, prev_real_aoi, next_real_aoi, prev_position, next_position, prev_energy, next_energy, reward, uav_action_index
