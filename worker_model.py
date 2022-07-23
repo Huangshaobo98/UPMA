@@ -118,7 +118,6 @@ class UAV(WorkerBase):
         self.max_energy = g["uav_energy"]
         self._energy = self.max_energy
         self._charge_cells = g["charge_cells"]
-        self._slot_step_for_charge = 4     #用于表示充电所耗费的时隙数量
         self._sec_per_slot = g["cell_length"] * sqrt(3) / g["uav_speed"] \
             if g["map_style"] == 'h' else g["cell_length"] / g["uav_speed"]
         self._slot_for_charge = 1
