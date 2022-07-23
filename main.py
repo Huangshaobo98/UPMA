@@ -16,14 +16,13 @@ def global_init():
         "sensor_number": 500,
         "uav_speed": 12,                     # m/s
         "uav_energy": 20,                    # Wh
-        "max_slot": 3000,
-        "punish": 100,
+        "max_slot": 5000,
+        "punish": 200,
         "batch_size": 256,
-        "eposide": 1000,
         "charge_time": 60,
-        "max_eposide": 10,
+        "max_eposide": 1000,
         "initial_trust": 0.5,
-        "hover_punish": 25
+        "hover_punish": 50
     }
     if g["cell_limit"] == 6:
         g["charge_cells"] = [[1, 1], [4, 4], [1, 4], [4, 1]]

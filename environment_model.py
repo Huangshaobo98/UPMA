@@ -143,7 +143,7 @@ class Environment:
         done = False
         if self.__charge_slot <= 0:     # 不充电时无人机进行步进，否则只允许车辆进行步进
             [prev_observation_aoi, next_observation_aoi, prev_real_aoi, next_real_aoi, prev_position, next_position, prev_energy, next_energy, reward, uav_action_index] = self.uav_step(True)
-            if next_energy < 0 or self.__current_slot == self.__max_slot:
+            if self.__current_slot == self.__max_slot:
                 done = True
             self.__agent.memorize(prev_observation_aoi, next_observation_aoi, prev_real_aoi, next_real_aoi, prev_position,
                                 next_position, prev_energy, next_energy, reward, uav_action_index, done)
