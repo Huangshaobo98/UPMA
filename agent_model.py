@@ -35,6 +35,7 @@ class DQNAgent:
         self.epsilon_min = epsilon_min
         self.epsilon_decay = epsilon_decay
         self.learning_rate = lr
+        self.pos_grid = True
 
         self.model = self._build_model(dueling)
         self.target_model = self._build_model(dueling)  # 创建两个相同的网络模型
@@ -44,15 +45,22 @@ class DQNAgent:
         return K.mean(K.sqrt(1 + K.square(y_pred - y_true)) - 1, axis=-1)
 
     def transform(self, pos_state):
-        new_pos_state = np.zeros(shape=(2, self.cell_size,), dtype=np.float64)
-        new_pos_state[0, pos_state[0]] = 1
-        new_pos_state[1, pos_state[1]] = 1
+        if not self.pos_grid:
+            new_pos_state = np.zeros(shape=(2, self.cell_size,), dtype=np.float64)
+            new_pos_state[0, pos_state[0]] = 1
+            new_pos_state[1, pos_state[1]] = 1
+        else:
+            new_pos_state = np.zeros(shape=(self.cell_size, self.cell_size), dtype=np.float64)
+            new_pos_state[pos_state[0]][pos_state[1]] = 1
         return new_pos_state
 
     def _build_model(self, dueling):
         # Neural Net for Deep-Q learning Model
         InputA = Input(shape=(self.cell_size, self.cell_size)) # 观测AoI状态
-        InputB = Input(shape=(2, self.cell_size))                    # 无人机坐标点
+        if not self.pos_grid:
+            InputB = Input(shape=(2, self.cell_size))                    # 无人机坐标点
+        else:
+            InputB = Input(shape=(self.cell_size, self.cell_size))
         InputC = Input(shape=(1,))                                              # 能量模型，一维数值
 
         # x = Conv2D(6, (3, 3), padding='same', activation='linear')(InputA)
@@ -73,7 +81,6 @@ class DQNAgent:
 
         # model.add(Dense(128, input_dim=self.state_size, activation='relu'))
         o = Dense(1024, activation='relu')(combined)
-        o = Dense(1024, activation='relu')(o)
         o = Dense(512, activation='relu')(o)
         o = Dense(256, activation='relu')(o)
         o = Dense(256, activation='relu')(o)

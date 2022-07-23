@@ -57,6 +57,7 @@ class Worker(WorkerBase):
         self.id = Worker.__index
         Worker.__index += 1
         self._activity = g["worker_activity"]
+        self._work_rate = g["worker_work_rate"]
         self._honest = 1
         self._success_cnt = 0
         self._fail_cnt = 0
@@ -87,6 +88,8 @@ class Worker(WorkerBase):
 
     def work(self, cell):
         # work进行移动和工作，随机采集一些节点内的数据，采集后进行上报。当然其采集的性能是依赖于自身honest属性。
+        if rand() > self._work_rate: #
+            return False
         sensors = cell.get_sensors()
         selected_sensors = sample(sensors, randint(0, len(sensors)))
         if len(selected_sensors) > 0:

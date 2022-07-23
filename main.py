@@ -9,20 +9,21 @@ def global_init():
         "cell_limit": 6,                              # 边界
         "cell_length": 48,                      # 小区边长
         "out_able": True,                      # 是否可以越出边界移动（仅对于worker）
-        "worker_number": 20,
+        "worker_number": 2,
         "worker_initial_trust": 0.5,
-        "worker_activity": 0.3,              # worker跨区移动的可能性
+        "worker_activity": 0.4,              # worker跨区移动的可能性
+        "worker_work_rate": 0.4,
         "sensor_number": 500,
         "uav_speed": 12,                     # m/s
         "uav_energy": 20,                    # Wh
         "max_slot": 3000,
         "punish": 100,
         "batch_size": 256,
-        "eposide": 2000,
+        "eposide": 1000,
         "charge_time": 60,
-        "max_eposide": 1000,
+        "max_eposide": 10,
         "initial_trust": 0.5,
-        "hover_punish": 10
+        "hover_punish": 25
     }
     if g["cell_limit"] == 6:
         g["charge_cells"] = [[1, 1], [4, 4], [1, 4], [4, 1]]
