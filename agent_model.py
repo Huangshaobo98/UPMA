@@ -25,23 +25,25 @@ EPISODES = 5000
 
 class DQNAgent:
     def __init__(self, cell_size, action_size, gamma=0.9, epsilon=1, epsilon_decay=0.99999,
-                 epsilon_min=0.01, lr=0.001, dueling=True):
+                 epsilon_min=0.01, lr=0.001, dueling=True, continue_train=False, continue_train_path=""):
         # 暂且设定的动作集合：'h': 六个方向的单元移动+一种什么都不做的悬浮，在特定小区的悬浮可以看做是进行了充电操作
         self.cell_size = cell_size
         self.action_size = action_size
         self.memory = deque(maxlen=20000)  # 创建双端队列
         self.gamma = gamma  # discount rate
-        self.epsilon = epsilon # exploration rate
+        self.epsilon = epsilon  # exploration rate
         self.epsilon_min = epsilon_min
         self.epsilon_decay = epsilon_decay
         self.learning_rate = lr
         self.pos_grid = True
-
         self.model = self._build_model(dueling)
         self.target_model = self._build_model(dueling)  # 创建两个相同的网络模型
+        if continue_train:
+            self.load(continue_train_path)
         self.update_target_model()
 
-    def huber_loss(self, y_true, y_pred):
+    @staticmethod
+    def huber_loss(y_true, y_pred):
         return K.mean(K.sqrt(1 + K.square(y_pred - y_true)) - 1, axis=-1)
 
     def transform(self, pos_state):
@@ -56,7 +58,7 @@ class DQNAgent:
 
     def _build_model(self, dueling):
         # Neural Net for Deep-Q learning Model
-        InputA = Input(shape=(self.cell_size, self.cell_size)) # 观测AoI状态
+        InputA = Input(shape=(self.cell_size, self.cell_size))  # 观测AoI状态
         if not self.pos_grid:
             InputB = Input(shape=(2, self.cell_size))                    # 无人机坐标点
         else:
@@ -89,7 +91,8 @@ class DQNAgent:
         # z = Dense(, activation='relu')(z)
         if dueling:
             o = Dense(self.action_size + 1, activation='linear')(o)
-            o = Lambda(lambda i: K.expand_dims(i[:,0],-1) + i[:,1:] - K.mean(i[:,1:], keepdims=True), output_shape=(self.action_size,))(o)
+            o = Lambda(lambda i: K.expand_dims(i[:, 0], -1) + i[:, 1:] - K.mean(i[:, 1:], keepdims=True),
+                       output_shape=(self.action_size,))(o)
         else:
             o = Dense(self.action_size, activation='linear')(o)
 
@@ -102,19 +105,31 @@ class DQNAgent:
         # copy weights from model to target_model
         self.target_model.set_weights(self.model.get_weights())
 
-    def memorize(self, prev_observation_aoi, next_observation_aoi, prev_real_aoi, next_real_aoi, prev_position, next_position, prev_energy, next_energy, reward, action, done):
+    def memorize(self,
+                 prev_observation_aoi, next_observation_aoi,
+                 prev_real_aoi, next_real_aoi,
+                 prev_position, next_position,
+                 prev_energy, next_energy, reward, action, done):
         prev_pos_state = self.transform(prev_position)
         next_pos_state = self.transform(next_position)
-        self.memory.append((prev_observation_aoi, next_observation_aoi, prev_real_aoi, next_real_aoi, prev_pos_state, next_pos_state, prev_energy, next_energy, reward, action, done))
 
-    def act(self, real_aoI_state, observation_aoi_state, position_state, energy_state, predict_by_real: bool):
+        self.memory.append((prev_observation_aoi, next_observation_aoi,
+                            prev_real_aoi, next_real_aoi,
+                            prev_pos_state, next_pos_state,
+                            prev_energy, next_energy, reward, action, done))
+
+    def act(self, real_aoi_state, observation_aoi_state, position_state, energy_state, predict_by_real: bool):
         pos_state = self.transform(position_state)
         if predict_by_real:
             if np.random.rand() <= self.epsilon:
                 return random.randrange(self.action_size)
-            act_values = self.model.predict([real_aoI_state[np.newaxis, :, :], pos_state[np.newaxis, :, :], energy_state[np.newaxis, :]], batch_size=1, verbose=0)
+            act_values = self.model.predict([real_aoi_state[np.newaxis, :, :],
+                                             pos_state[np.newaxis, :, :],
+                                             energy_state[np.newaxis, :]], batch_size=1, verbose=0)
         else:
-            act_values = self.model.predict([observation_aoi_state[np.newaxis, :, :], pos_state[np.newaxis, :, :], energy_state[np.newaxis, :]], batch_size=1, verbose=0)
+            act_values = self.model.predict([observation_aoi_state[np.newaxis, :, :],
+                                             pos_state[np.newaxis, :, :],
+                                             energy_state[np.newaxis, :]], batch_size=1, verbose=0)
         return np.argmax(act_values[0])  # returns action
 
     def replay(self, batch_size):
@@ -133,8 +148,14 @@ class DQNAgent:
         prev_energy = np.stack(minibatch[:, 6])
         next_energy = np.stack(minibatch[:, 7])
 
-        next_targets = self.model.predict([next_real_aoi_states, next_position_states, next_energy], batch_size=batch_size, verbose=0)
-        targets = self.model.predict([prev_real_aoi_states, prev_position_states, prev_energy], batch_size=batch_size, verbose=0)
+        next_targets = self.model.predict([next_real_aoi_states,
+                                           next_position_states,
+                                           next_energy], batch_size=batch_size, verbose=0)
+
+        targets = self.model.predict([prev_real_aoi_states,
+                                      prev_position_states,
+                                      prev_energy], batch_size=batch_size, verbose=0)
+
         done = np.stack(minibatch[:, 10])
 
         reward = np.stack(minibatch[:, 8])
@@ -143,7 +164,8 @@ class DQNAgent:
         targets[done, action[done]] = reward[done]
         targets[range(batch_size), action] = reward + self.gamma * np.amax(next_targets, axis=1).reshape(reward.shape)
 
-        self.model.fit([prev_real_aoi_states, prev_position_states, prev_energy], targets, epochs=1, batch_size=batch_size, verbose=0)
+        self.model.fit([prev_real_aoi_states, prev_position_states, prev_energy],
+                       targets, epochs=1, batch_size=batch_size, verbose=0)
 
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay

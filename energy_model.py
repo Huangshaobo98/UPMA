@@ -1,4 +1,4 @@
-from global_ import Global
+from global_parameter import Global as g
 from math import sqrt
 
 
@@ -8,8 +8,7 @@ class Energy:
 
     @staticmethod
     def init():
-        g = Global()
-        v = g["uav_speed"]
+        v = g.uav_speed
         W = 1.2
         D = 1.29
         x = 0.221
@@ -20,12 +19,12 @@ class Energy:
         hover_energy_power = (W ** 2) / D / (x * y) / v
         move_energy_power = 0.5 * Cd * A * D * (v ** 3) + hover_energy_power
 
-        if g["map_style"] == 'h':
-            Energy.__move_energy_cost = move_energy_power * sqrt(3) * g["cell_length"] / v
-            Energy.__hover_energy_cost = hover_energy_power * sqrt(3) * g["cell_length"] / v
-        elif g["map_style"] == 'g':
-            Energy.__move_energy_cost = move_energy_power * g["cell_length"] / v
-            Energy.__hover_energy_cost = hover_energy_power * g["cell_length"] / v
+        if g.map_style == 'h':
+            Energy.__move_energy_cost = move_energy_power * sqrt(3) * g.cell_length / v
+            Energy.__hover_energy_cost = hover_energy_power * sqrt(3) * g.cell_length / v
+        elif g.map_style == 'g':
+            Energy.__move_energy_cost = move_energy_power * g.cell_length / v
+            Energy.__hover_energy_cost = hover_energy_power * g.cell_length / v
         else:
             assert False
 

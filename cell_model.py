@@ -1,17 +1,16 @@
 from sensor_model import Sensor
 import random
 from math import sqrt
-from global_ import Global
+from global_parameter import Global as g
 
 
 class Cell:
     def __init__(self, x=0, y=0):
         self.__x = x
         self.__y = y
-        g = Global()
-        self.__length = g["cell_length"]
-        self.__map_style = g["map_style"]
-        if g["map_style"] == 'h':
+        self.__length = g.cell_length
+        self.__map_style = g.map_style
+        if g.map_style == 'h':
             self.__x_location = 1.5 * (self.__x - self.__y) * self.__length
             self.__y_location = sqrt(3) / 2 * (self.__x + self.__y) * self.__length
         else:
@@ -48,14 +47,14 @@ class Cell:
     def plot_cell(self, axis):
         if self.__map_style == 'h':
             x_val = [item + self.__x_location for item in [-self.__length, -self.__length / 2,
-                           self.__length / 2, self.__length, self.__length / 2, -self.__length / 2, -self.__length]]
+                     self.__length / 2, self.__length, self.__length / 2, -self.__length / 2, -self.__length]]
             y_val = [item + self.__y_location for item in [0, -self.__length * sqrt(3) / 2, -self.__length * sqrt(3) / 2, 0,
-                          self.__length * sqrt(3) / 2, self.__length * sqrt(3) / 2, 0]]
+                     self.__length * sqrt(3) / 2, self.__length * sqrt(3) / 2, 0]]
         elif self.__map_style == 'g':
             x_val = [item + self.__x_location for item in [-self.__length / 2, self.__length / 2,
-                           self.__length / 2, -self.__length / 2]]
+                     self.__length / 2, -self.__length / 2]]
             y_val = [item + self.__y_location for item in [-self.__length / 2, -self.__length / 2,
-                           self.__length / 2, self.__length / 2]]
+                     self.__length / 2, self.__length / 2]]
         else:
             assert False
 
@@ -86,11 +85,10 @@ class Cell:
 def uniform_generator(seed=10):
     random.seed(seed)
     ret_cell = []
-    g = Global()
-    cell_limit = g["cell_limit"]
-    cell_length = g["cell_length"]
-    sensor_number = g["sensor_number"]
-    map_style = g["map_style"]
+    cell_limit = g.cell_limit
+    cell_length = g.cell_length
+    sensor_number = g.sensor_number
+    map_style = g.map_style
     for x in range(cell_limit):
         ret_cell.append([Cell(x, y) for y in range(cell_limit)])
     sensor_cell_x = [random.randint(0, cell_limit - 1) for _ in range(sensor_number)]
@@ -101,7 +99,7 @@ def uniform_generator(seed=10):
         sensor_x_diff = [random.uniform(0, cell_length) for _ in range(sensor_number)]
         sensor_y_diff = [random.uniform(0, cell_length) for _ in range(sensor_number)]
     elif map_style == 'h':
-        sensor_x_diff = [random.uniform(-cell_length, cell_length)  for _ in range(sensor_number)]
+        sensor_x_diff = [random.uniform(-cell_length, cell_length) for _ in range(sensor_number)]
         sensor_y_diff = [random.uniform(-cell_length * r3 / 2, cell_length * r3 / 2) if abs(x) < cell_length / 2
                          else random.uniform(abs(x) * r3 - r3 * cell_length, - abs(x) * r3 + r3 * cell_length)
                          for x in sensor_x_diff]
