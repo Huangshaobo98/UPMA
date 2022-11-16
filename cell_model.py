@@ -42,7 +42,7 @@ class Cell:
         return x, y
 
     def get_sensors(self):
-        return  self.__sensors
+        return self.__sensors
 
     def plot_cell(self, axis):
         if self.__map_style == 'h':

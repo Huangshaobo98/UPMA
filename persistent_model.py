@@ -1,4 +1,3 @@
-import numpy as np
 import csv
 import threading
 import os
@@ -46,10 +45,9 @@ class Persistent:
             if os.path.exists(self.__test_data_path):
                 os.remove(self.__test_data_path)
             __file_handle = open(self.__test_data_path, 'w+')
+        assert self.__file_handle is not None
 
         self.__file_writer = csv.writer(__file_handle)
-
-        assert self.__file_handle is not None
         assert self.__file_writer is not None
 
     def save_data(self, **kwargs):

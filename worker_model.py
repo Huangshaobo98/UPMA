@@ -2,7 +2,6 @@ from random import random as rand
 from random import choice, sample, randint
 from global_parameter import Global as g
 from energy_model import Energy
-from math import sqrt
 
 
 class MobilePolicy:
@@ -144,42 +143,42 @@ class UAV(WorkerBase):
     def __init__(self, x_start, y_start):
         super(UAV, self).__init__(x_start, y_start, 1.0, False, g.uav_start_fix)
         self.max_energy = g.uav_energy
-        self._energy = g.uav_energy
-        self._charge_cells = g.charge_cells                 # 可充电小区
-        self._charge_everywhere = g.charge_everywhere       # 任意位置充电
-        self._sec_per_slot = g.cell_length / g.uav_speed    # 每个时隙代表多少秒
-        if g.map_style == 'h':
-            self._sec_per_slot *= sqrt(3)
-        self._slot_for_charge = 1
+        self.__energy = g.uav_energy
+        self.__charge_cells = g.charge_cells                 # 可充电小区
+        self.__charge_everywhere = g.charge_everywhere       # 任意位置充电
+        self.__sec_per_slot = g.sec_per_slot                 # 每个时隙代表多少秒
+        self.__charge_state = False                         # 标记是否正在充电
         # ceil(g["charge_time"] / self._sec_per_slot)
 
-    def action(self, dx_dy):
+    def act(self, dx_dy):
         prev_location = self.get_location()
-        if dx_dy == [0, 0] and (self._charge_everywhere or (prev_location in self._charge_cells)):
-            self.__charge()  # 执行一个充电操作，电量补充
+        # 检测是否主动作出了悬浮操作，如果是，则检查是否悬浮在可充电区域上方，是则充电；如果配置了任意单元可充电，则不需要检查充电区域
+        if dx_dy == [0, 0] and (self.__charge_everywhere or (prev_location in self.__charge_cells)):
+            self.__charge()
             return True     # charge ?
 
-        super(UAV, self).action(dx_dy)
-        new_location = self.get_location()
-        if prev_location == new_location:
-            self._energy -= (Energy.hover_energy_cost() * self._sec_per_slot / 3600)  # 到达了边界无法移动，仅能进行悬浮操作
-        else:
-            self._energy -= (Energy.move_energy_cost() * self._sec_per_slot / 3600)
+        new_location = super(UAV, self).action(dx_dy)
+        self.__energy_consumption(prev_location == new_location)
         return False
 
     def get_energy(self):
         return self._energy
 
     def __charge(self):
-        self._energy = self.max_energy
+        # self._energy = self.max_energy
+        self.__charge_state = True
+        self._energy = max(self.max_energy, self.__energy + Energy.charge_energy_one_slot())
+
+    def __energy_consumption(self, move: bool):
+        self.__charge_state = False
+        self.__energy -= (Energy.move_energy_cost() if move else Energy.hover_energy_cost())
 
     def clear(self):
-        super(UAV, self).clear()        # 位置清除
-        self._energy = self.max_energy  # 能量恢复
+        super(UAV, self).clear()            # 位置清除
+        self.__energy = self.max_energy     # 能量恢复
+        self.__charge_state = False
         # 信任不需要变化，uav信任保持为1
 
-    def get_second_per_slot(self):
-        return self._sec_per_slot
-
-    def get_charge_slot(self):
-        return self._slot_for_charge
+    @property
+    def get_charge_state(self):
+        return self.__charge_state

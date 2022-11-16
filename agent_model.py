@@ -22,10 +22,9 @@ import keras.backend as K
 
 EPISODES = 5000
 
-
 class DQNAgent:
     def __init__(self, cell_size, action_size, gamma=0.9, epsilon=1, epsilon_decay=0.99999,
-                 epsilon_min=0.01, lr=0.001, dueling=True, continue_train=False, continue_train_path=""):
+                 epsilon_min=0.08, lr=0.0005, dueling=True, continue_train=False, continue_train_path=""):
         # 暂且设定的动作集合：'h': 六个方向的单元移动+一种什么都不做的悬浮，在特定小区的悬浮可以看做是进行了充电操作
         self.cell_size = cell_size
         self.action_size = action_size
@@ -35,7 +34,7 @@ class DQNAgent:
         self.epsilon_min = epsilon_min
         self.epsilon_decay = epsilon_decay
         self.learning_rate = lr
-        self.pos_grid = True
+        self.pos_grid = False
         self.model = self._build_model(dueling)
         self.target_model = self._build_model(dueling)  # 创建两个相同的网络模型
         if continue_train:
@@ -63,7 +62,8 @@ class DQNAgent:
             InputB = Input(shape=(2, self.cell_size))                    # 无人机坐标点
         else:
             InputB = Input(shape=(self.cell_size, self.cell_size))
-        InputC = Input(shape=(1,))                                              # 能量模型，一维数值
+        InputC = Input(shape=(1,))      # 能量模型，一维数值
+        InputD = Input(shape=(1,))      # 是否在充电1.0-true 0.0 false
 
         # x = Conv2D(6, (3, 3), padding='same', activation='linear')(InputA)
         x = Flatten()(InputA)
@@ -79,7 +79,10 @@ class DQNAgent:
         z = Flatten()(InputC)
         z = Model(inputs=InputC, outputs=z)
 
-        combined = K.concatenate([x.output, y.output, z.output])
+        q = Flatten()(InputD)
+        q = Model(inputs=InputD, outputs=z)
+
+        combined = K.concatenate([x.output, y.output, z.output, q.output])
 
         # model.add(Dense(128, input_dim=self.state_size, activation='relu'))
         o = Dense(1024, activation='relu')(combined)
@@ -96,7 +99,7 @@ class DQNAgent:
         else:
             o = Dense(self.action_size, activation='linear')(o)
 
-        model = Model(inputs=[x.input, y.input, z.input], outputs=o)
+        model = Model(inputs=[x.input, y.input, z.input, q.input], outputs=o)
         model.compile(loss=self.huber_loss, optimizer=Adam(learning_rate=self.learning_rate))
         # plot_model(model, to_file='Flatten.png', show_shapes=True)
         return model
@@ -109,16 +112,22 @@ class DQNAgent:
                  prev_observation_aoi, next_observation_aoi,
                  prev_real_aoi, next_real_aoi,
                  prev_position, next_position,
-                 prev_energy, next_energy, reward, action, done):
+                 prev_energy, next_energy,
+                 prev_charge_state, next_charge_state,
+                 uav_action_index, reward, done):
+
         prev_pos_state = self.transform(prev_position)
         next_pos_state = self.transform(next_position)
 
         self.memory.append((prev_observation_aoi, next_observation_aoi,
                             prev_real_aoi, next_real_aoi,
                             prev_pos_state, next_pos_state,
-                            prev_energy, next_energy, reward, action, done))
+                            prev_energy, next_energy,
+                            prev_charge_state, next_charge_state,
+                            uav_action_index, reward, done))
 
-    def act(self, real_aoi_state, observation_aoi_state, position_state, energy_state, predict_by_real: bool):
+    # 废弃
+    def deprecated_act(self, real_aoi_state, observation_aoi_state, position_state, energy_state, predict_by_real: bool):
         pos_state = self.transform(position_state)
         if predict_by_real:
             if np.random.rand() <= self.epsilon:
@@ -132,9 +141,26 @@ class DQNAgent:
                                              energy_state[np.newaxis, :]], batch_size=1, verbose=0)
         return np.argmax(act_values[0])  # returns action
 
+    def act(self, aoi_state, position_state, energy_state, charge_state):
+        pos_state = self.transform(position_state)
+        if np.random.rand() <= self.epsilon:
+            return random.randrange(self.action_size)
+        act_values = self.model.predict([aoi_state[np.newaxis, :, :],
+                                         pos_state[np.newaxis, :, :],
+                                         energy_state[np.newaxis, :],
+                                         charge_state[np.newaxis, :]], batch_size=1, verbose=0)
+        return np.argmax(act_values[0])  # returns action
+
     def replay(self, batch_size):
 
         minibatch = np.array(random.sample(self.memory, batch_size), dtype=object)
+
+        # self.memory.append((prev_observation_aoi, next_observation_aoi,
+        #                     prev_real_aoi, next_real_aoi,
+        #                     prev_pos_state, next_pos_state,
+        #                     prev_energy, next_energy,
+        #                     prev_charge_state, next_charge_state,
+        #                     uav_action_index, reward, done))
 
         prev_real_aoi_states = np.stack(minibatch[:, 2])
         next_real_aoi_states = np.stack(minibatch[:, 3])
@@ -148,23 +174,27 @@ class DQNAgent:
         prev_energy = np.stack(minibatch[:, 6])
         next_energy = np.stack(minibatch[:, 7])
 
+        prev_charge_state = np.stack(minibatch[:, 8])
+        next_charge_state = np.stack(minibatch[:, 9])
+
+        done = np.stack(minibatch[:, 12])
+
+        reward = np.stack(minibatch[:, 11])
+        action = np.stack(minibatch[:, 10])
+
         next_targets = self.model.predict([next_real_aoi_states,
                                            next_position_states,
-                                           next_energy], batch_size=batch_size, verbose=0)
+                                           next_energy,
+                                           next_charge_state], batch_size=batch_size, verbose=0)
 
         targets = self.model.predict([prev_real_aoi_states,
                                       prev_position_states,
-                                      prev_energy], batch_size=batch_size, verbose=0)
+                                      prev_energy,
+                                      prev_charge_state], batch_size=batch_size, verbose=0)
 
-        done = np.stack(minibatch[:, 10])
-
-        reward = np.stack(minibatch[:, 8])
-        action = np.stack(minibatch[:, 9])
-
-        targets[done, action[done]] = reward[done]
         targets[range(batch_size), action] = reward + self.gamma * np.amax(next_targets, axis=1).reshape(reward.shape)
-
-        self.model.fit([prev_real_aoi_states, prev_position_states, prev_energy],
+        targets[done, action[done]] = reward[done]
+        self.model.fit([prev_real_aoi_states, prev_position_states, prev_energy, prev_charge_state],
                        targets, epochs=1, batch_size=batch_size, verbose=0)
 
         if self.epsilon > self.epsilon_min:

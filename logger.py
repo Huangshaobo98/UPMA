@@ -4,8 +4,9 @@ import time
 
 
 class Logger:
-    def __init__(self, directory: str, console_log: bool):
+    def __init__(self, directory: str, console_log: bool, file_log: bool):
         self.__console_log = console_log
+        self.__file_log = file_log
         self.__log_directory = directory + "/log"
         log_time = time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime(time.time()))
         self.__log_path = self.__log_directory + "/log_" + log_time + ".txt"
@@ -23,4 +24,5 @@ class Logger:
         msg += "\r\n"
         if self.__console_log:
             print(msg)
-        self.__log_handle.write(msg)
+        if self.__file_log:
+            self.__log_handle.write(msg)

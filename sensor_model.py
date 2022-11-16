@@ -1,7 +1,7 @@
 from aoi_model import AoI
 from worker_model import Worker
-from typing import List
 from collections import defaultdict
+
 
 class Sensor:
     __location_x = []
@@ -41,7 +41,7 @@ class Sensor:
         self.__aoi.report_by_uav(current_slot)      # 对uav访问节点的aoi刷新
         for worker, value in self.__worker_success_dict.items():    # 对采集过此节点的worker进行汇报成功
             worker.add_success(value)
-        for worker,value in self.__worker_fail_dict.items():
+        for worker, value in self.__worker_fail_dict.items():
             worker.add_fail(value)
 
     def report_by_workers(self, current_slot):
