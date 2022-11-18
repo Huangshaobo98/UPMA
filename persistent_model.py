@@ -16,11 +16,11 @@ class Persistent:
         self.__train_data_path = self.__train_directory + "/running.csv"
         self.__test_data_path = self.__test_directory + "/running.csv"
 
-        if not os.path.exists(self.__model_path):
-            os.makedirs(self.__model_path)
+        if not os.path.exists(self.__model_directory):
+            os.makedirs(self.__model_directory)
         if not os.path.exists(self.__train_directory):
             os.makedirs(self.__train_directory)
-        if not os.path.exists(self.__test_data_path):
+        if not os.path.exists(self.__test_directory):
             os.makedirs(self.__test_directory)
 
         self.__file_handle = None
@@ -39,15 +39,15 @@ class Persistent:
                     os.remove(self.__train_data_path)
             else:                                       # 断点训练，需要取出原有的训练模型，并且以追加形式训练模型
                 self.__added_header = True
-            __file_handle = open(self.__train_data_path, 'a+')
+            self.__file_handle = open(self.__train_data_path, 'a+')
         else:
             # 测试模式，清空以往测试数据。此时模式不存在追加，只能从0开始
             if os.path.exists(self.__test_data_path):
                 os.remove(self.__test_data_path)
-            __file_handle = open(self.__test_data_path, 'w+')
+            self.__file_handle = open(self.__test_data_path, 'w+')
         assert self.__file_handle is not None
 
-        self.__file_writer = csv.writer(__file_handle)
+        self.__file_writer = csv.writer(self.__file_handle)
         assert self.__file_writer is not None
 
     def save_data(self, **kwargs):

@@ -37,5 +37,5 @@ class AoI:
     def dummy_report(self, workers: List[Worker], current_slot):
         max_trust = 0
         for worker in workers:
-            max_trust = max(max_trust, worker.get_trust())
+            max_trust = max(max_trust, worker.trust)
         self.__last_dummy = max_trust * (current_slot - self.__last_dummy) + self.__last_dummy

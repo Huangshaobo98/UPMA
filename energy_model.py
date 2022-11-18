@@ -1,5 +1,4 @@
 from global_parameter import Global as g
-from math import sqrt
 
 
 class Energy:

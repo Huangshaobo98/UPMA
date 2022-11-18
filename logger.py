@@ -14,15 +14,15 @@ class Logger:
             os.makedirs(self.__log_directory)
         self.__log_handle = open(self.__log_path, "w")
 
-    def message(self, **kwargs):
-        msg = ""
-        for key, value in kwargs:
-            msg += key
-            msg += ": "
-            msg += value
-            msg += "; "
-        msg += "\r\n"
-        if self.__console_log:
-            print(msg)
+    def file_log(self, msg: str):
         if self.__file_log:
             self.__log_handle.write(msg)
+
+    def console_log(self, msg: str):
+        if self.__console_log:
+            print(msg)
+
+    def log(self, msg: str):
+        log_time = time.strftime("%Y-%m-%d %H-%M-%S", time.localtime(time.time()))
+        self.file_log(log_time + ":\r" + msg + "\r\n")
+        self.console_log(log_time + "\r" + msg)

@@ -1,12 +1,13 @@
 import sys
+from global_parameter import Global as g
 
 
 def command_parse():
     commands = sys.argv[1:]
-    console_log = False
-    file_log = False
-    train = True
-    continue_train = False
+    console_log = g.default_console_log
+    file_log = g.default_file_log
+    train = g.default_train
+    continue_train = g.default_continue_train
     for item in commands:
         if item == "--console_log":
             console_log = True

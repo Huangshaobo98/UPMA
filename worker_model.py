@@ -63,10 +63,12 @@ class WorkerBase:
             self._y = (self._y + dy) % g.cell_limit
         return self._x, self._y
 
-    def get_trust(self):
+    @property
+    def trust(self):
         return self._trust
 
-    def get_location(self):
+    @property
+    def position(self):
         return [self._x, self._y]
 
     def clear(self):
@@ -142,7 +144,7 @@ class Worker(WorkerBase):
 class UAV(WorkerBase):
     def __init__(self, x_start, y_start):
         super(UAV, self).__init__(x_start, y_start, 1.0, False, g.uav_start_fix)
-        self.max_energy = g.uav_energy
+        self.__max_energy = g.uav_energy
         self.__energy = g.uav_energy
         self.__charge_cells = g.charge_cells                 # 可充电小区
         self.__charge_everywhere = g.charge_everywhere       # 任意位置充电
@@ -151,18 +153,22 @@ class UAV(WorkerBase):
         # ceil(g["charge_time"] / self._sec_per_slot)
 
     def act(self, dx_dy):
-        prev_location = self.get_location()
+        prev_location = self.position
         # 检测是否主动作出了悬浮操作，如果是，则检查是否悬浮在可充电区域上方，是则充电；如果配置了任意单元可充电，则不需要检查充电区域
         if dx_dy == [0, 0] and (self.__charge_everywhere or (prev_location in self.__charge_cells)):
             self.__charge()
-            return True     # charge ?
+            return
 
         new_location = super(UAV, self).action(dx_dy)
         self.__energy_consumption(prev_location == new_location)
-        return False
 
-    def get_energy(self):
-        return self._energy
+    @property
+    def energy(self) -> float:
+        return self.__energy
+
+    @property
+    def max_energy(self) -> float:
+        return self.__max_energy
 
     def __charge(self):
         # self._energy = self.max_energy

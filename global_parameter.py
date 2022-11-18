@@ -33,12 +33,19 @@ class Global:
     batch_size = 256            # 批大小
     # charge_time = 60          # 充电耗时(废弃参数)
     max_episode = 1000          # 最大训练episode
+    onehot_position = True      # 位置编码为onehot形式
 
     # 充电位置
     charge_cells = [[1, 1], [4, 4], [1, 4], [4, 1]]     # 待设置的参数
 
     # 其他参数(基于上述参数计算得到的)，在init中进行初始化
     sec_per_slot = 0
+
+    # 日志配置参数
+    default_file_log = False
+    default_console_log = True
+    default_train = True
+    default_continue_train = False
 
     # init方法只用来检测是否正确的初始化了，可能后续有一些参数需要进行验证?
     @staticmethod
@@ -51,8 +58,8 @@ class Global:
     @staticmethod
     def check():
         assert Global.map_style == 'h' or Global.map_style == 'g'
-        assert Global.cell_limit is int
-        assert Global.worker_number is int
-        assert Global.max_slot is int
-        assert Global.max_episode is int
-        assert Global.batch_size is int
+        assert type(Global.cell_limit) is int
+        assert type(Global.worker_number) is int
+        assert type(Global.max_slot) is int
+        assert type(Global.max_episode) is int
+        assert type(Global.batch_size) is int
