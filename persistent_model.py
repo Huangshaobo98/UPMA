@@ -50,10 +50,10 @@ class Persistent:
         self.__file_writer = csv.writer(self.__file_handle)
         assert self.__file_writer is not None
 
-    def save_data(self, **kwargs):
+    def save_data(self, datas):
         keys = []
         values = []
-        for key, value in kwargs.items():
+        for key, value in datas.items():
             keys.append(key)
             values.append(value)
 

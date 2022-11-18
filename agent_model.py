@@ -47,7 +47,7 @@ class State:
     def __str__(self):
         msg = "Position: {}, charge state: {}, energy left: {}.\r\nreal aoi:\r\n{}\r\nobservation aoi:\r\n{}"\
             .format(self.position, self.charge,
-                    self.energy, str(np.around(self.real_aoi, 0)), str(np.around(self.observation_aoi, 2)))
+                    self.energy, str(self.real_aoi), str(self.observation_aoi))
         return msg
 
     @property
@@ -72,7 +72,7 @@ class State:
 
     @property
     def energy_state(self) -> np.ndarray:
-        return np.array(self.energy / State.max_energy, dtype=np.float64)
+        return np.array([self.energy / State.max_energy], dtype=np.float64)
 
     @property
     def charge(self) -> bool:
@@ -102,16 +102,16 @@ class State:
         return new_pos_state
 
     def pack_observation(self) -> List[np.ndarray]:
-        return [self.observation_aoi[np.newaxis, :, :], self.position_state[np.newaxis, :, :],
-                self.energy_state[np.newaxis, :, :], self.charge_state[np.newaxis, :, :]]
+        return [self.observation_aoi_state[np.newaxis, :, :], self.position_state[np.newaxis, :, :],
+                self.energy_state[np.newaxis, :], self.charge_state[np.newaxis, :]]
 
     def pack_real(self) -> List[np.ndarray]:
-        return [self.real_aoi[np.newaxis, :, :], self.position_state[np.newaxis, :, :],
-                self.energy_state[np.newaxis, :, :], self.charge_state[np.newaxis, :, :]]
+        return [self.real_aoi_state[np.newaxis, :, :], self.position_state[np.newaxis, :, :],
+                self.energy_state[np.newaxis, :], self.charge_state[np.newaxis, :]]
 
 
 class DQNAgent:
-    def __init__(self, cell_size, action_size, gamma=0.9, epsilon=1, epsilon_decay=0.99999,
+    def __init__(self, cell_size, action_size, gamma=0.9, epsilon=1, epsilon_decay=0.9999,
                  epsilon_min=0.08, lr=0.0005, dueling=True, train=True, continue_train=False, model_path=""):
         # 暂且设定的动作集合：'h': 六个方向的单元移动+一种什么都不做的悬浮，在特定小区的悬浮可以看做是进行了充电操作
         self.cell_size = cell_size
@@ -257,26 +257,6 @@ class DQNAgent:
 
         prev_state_stack, next_state_stack, action_stack, reward_stack, done_stack = self.__batch_stack(minibatch)
 
-        # prev_real_aoi_states = np.stack(minibatch[:, 2])
-        # next_real_aoi_states = np.stack(minibatch[:, 3])
-        #
-        # prev_observation_aoi = np.stack(minibatch[:, 0])
-        # next_observation_aoi = np.stack(minibatch[:, 1])
-        #
-        # prev_position_states = np.stack(minibatch[:, 4])
-        # next_position_states = np.stack(minibatch[:, 5])
-        #
-        # prev_energy = np.stack(minibatch[:, 6])
-        # next_energy = np.stack(minibatch[:, 7])
-        #
-        # prev_charge_state = np.stack(minibatch[:, 8])
-        # next_charge_state = np.stack(minibatch[:, 9])
-        #
-        # done = np.stack(minibatch[:, 12])
-        #
-        # reward = np.stack(minibatch[:, 11])
-        # action = np.stack(minibatch[:, 10])
-
         next_targets = self.model.predict(next_state_stack, batch_size=batch_size, verbose=0)
 
         targets = self.model.predict(prev_state_stack, batch_size=batch_size, verbose=0)
@@ -294,51 +274,3 @@ class DQNAgent:
 
     def save(self, name):
         self.model.save_weights(name)
-
-
-# if __name__ == "__main__":
-#     env = gym.make('CartPole-v1')
-#     state_size = env.observation_space.shape[0]
-#     action_size = env.action_space.n
-#     agent = DQNAgent(state_size, action_size)
-#     # agent.load("./save/cartpole-ddqn.h5")
-#     done = False
-#     batch_size = 32
-#
-#     for e in range(EPISODES):
-#         # timess = time()
-#         state = env.reset()
-#         # print('reset: {}'.format(time()-timess))
-#         state = np.reshape(state, [1, state_size])
-#         for timeee in range(500):
-#             env.render()
-#             timess = time()
-#             action = agent.act(state)
-#             # print('act: {}'.format(time() - timess))
-#             timess = time()
-#             next_state, reward, done, _ = env.step(action)
-#             # print('step: {}'.format(time() - timess))
-#             # reward = reward if not done else -10
-#             x, x_dot, theta, theta_dot = next_state
-#             r1 = (env.x_threshold - abs(x)) / env.x_threshold - 0.8
-#             r2 = (env.theta_threshold_radians - abs(theta)) / env.theta_threshold_radians - 0.5
-#             reward = r1 + r2
-#
-#             next_state = np.reshape(next_state, [1, state_size])
-#             timess = time()
-#             agent.memorize(state, action, reward, next_state, done)
-#             # print('memorize: {}'.format(time() - timess))
-#             state = next_state
-#             if done:
-#                 timess = time()
-#                 agent.update_target_model()
-#                 # print('update: {}'.format(time() - timess))
-#                 print("episode: {}/{}, score: {}, e: {:.2}"
-#                       .format(e, EPISODES, timeee, agent.epsilon))
-#                 break
-#             if len(agent.memory) > batch_size:
-#                 timess = time()
-#                 agent.replay(batch_size)
-#                 # print('replay: {}'.format(time() - timess))
-#         # if e % 10 == 0:
-#         #     agent.save("./save/cartpole-ddqn.h5")

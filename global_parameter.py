@@ -5,7 +5,7 @@ class Global:
     # 网络模型相关
     map_style = 'h'             # 地图类型h: 六边形 g: 栅格
     cell_limit = 6              # 边界大小
-    cell_length = 60            # 小区边长 m
+    cell_length = 600           # 小区边长 m
     out_able = True             # 可移动离开所观测小区
 
     # worker相关
@@ -51,9 +51,9 @@ class Global:
     @staticmethod
     def init():
         Global.check()
-        sec_per_slot = Global.cell_length / Global.uav_speed
+        Global.sec_per_slot = Global.cell_length / Global.uav_speed
         if Global.map_style == 'h':
-            sec_per_slot *= sqrt(3)
+            Global.sec_per_slot *= sqrt(3)
 
     @staticmethod
     def check():

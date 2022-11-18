@@ -129,16 +129,14 @@ class Environment:
 
         return prev_state, uav_action_index, next_state
 
-    def reward_calculate(self, prev_state: State, next_state: State):
+    def reward_calculate(self, prev_state: State, next_state: State, hover: bool):
         # reward 模型，可能后续有更改
         # punish = self.__punish if next_energy <= 0 else 0
         # 因为这里是训练得到的reward，因此用real_aoi进行计算
         # 这里虽然无人机可能会花费几个slot来换电池，但是我们对于模型的预测仍然采用下一个时隙的结果进行预测
         # To do: 惩罚因子仍旧有些问题，尝试一些方法解决权重相关的问题
         # reward = - np.sum(next_real_aoi) - punish - self.__hover_punish * hover
-        hover_punish = True if (prev_state.position == next_state.position
-                                and next_state.position not in self.__charge_cells) else False
-        reward = - np.sum(next_state.position) - self.__punish - self.__hover_punish * hover_punish
+        reward = - np.sum(next_state.real_aoi_state) - self.__punish - self.__hover_punish * hover
         return reward
 
     def workers_step(self):
@@ -174,18 +172,28 @@ class Environment:
         if self.__current_slot >= self.__max_slot or next_state.energy <= 0.0:  # 这里需要考虑电量问题?电量不足时是否直接结束状态
             done = True
 
-        reward = self.reward_calculate(prev_state, next_state)
+        hover = True if (prev_state.position == next_state.position
+                         and next_state.position not in self.__charge_cells) else False
+        reward = self.reward_calculate(prev_state, next_state, hover)
         self.logger.log("Reward: {}".format(reward))
         self.__agent.memorize(prev_state, action, next_state, reward, done)
 
-        self.__persistent.save_data(episode=self.__episode,
-                                    slot=self.__current_slot,
-                                    real_aoi=next_state.real_aoi,
-                                    observation_aoi=next_state.observation_aoi,
-                                    uav_position=next_state.position,
-                                    reward=reward,
-                                    energy=next_state.energy_state,
-                                    epsilon=self.__agent.epsilon)
+        persist_data = {
+            'episode': self.__episode,
+            'slot': self.__current_slot,
+            'sum real aoi': np.sum(next_state.real_aoi),
+            'average real aoi': np.average(next_state.real_aoi),
+            'sum observation aoi': np.sum(next_state.observation_aoi),
+            'average observation aoi': np.average(next_state.observation_aoi),
+            'hover': hover,
+            'charge': self.charge_state,
+            'uav position': next_state.position,
+            'reward': reward,
+            'energy': next_state.energy,
+            'energy left rate': next_state.energy_state,
+            'epsilon': self.__agent.epsilon
+        }
+        self.__persistent.save_data(persist_data)
 
         self.worker_trust_refresh()  # worker信任刷新
 
@@ -219,6 +227,7 @@ class Environment:
         self.__agent.save(self.__persistent.model_path())
 
     def start(self):
+        np.set_printoptions(suppress=True,precision=3)
         for episode in range(1, self.__max_episode + 1):
             self.__episode = episode
             self.episode_step()
