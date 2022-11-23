@@ -129,14 +129,16 @@ class Environment:
 
         return prev_state, uav_action_index, next_state
 
-    def reward_calculate(self, prev_state: State, next_state: State, hover: bool):
+    def reward_calculate(self, prev_state: State, next_state: State, hover: bool, charge: bool):
         # reward 模型，可能后续有更改
         # punish = self.__punish if next_energy <= 0 else 0
         # 因为这里是训练得到的reward，因此用real_aoi进行计算
         # 这里虽然无人机可能会花费几个slot来换电池，但是我们对于模型的预测仍然采用下一个时隙的结果进行预测
         # To do: 惩罚因子仍旧有些问题，尝试一些方法解决权重相关的问题
         # reward = - np.sum(next_real_aoi) - punish - self.__hover_punish * hover
-        reward = - np.sum(next_state.real_aoi_state) - self.__punish - self.__hover_punish * hover
+        # hover and not charge 悬浮但不充电，指的是无意义的悬浮操作
+        reward = - np.sum(next_state.real_aoi_state) - self.__punish - self.__hover_punish * (hover and not charge)
+
         return reward
 
     def workers_step(self):
@@ -174,7 +176,8 @@ class Environment:
 
         hover = True if (prev_state.position == next_state.position
                          and next_state.position not in self.__charge_cells) else False
-        reward = self.reward_calculate(prev_state, next_state, hover)
+        charge = self.charge_state
+        reward = self.reward_calculate(prev_state, next_state, hover, charge)
         self.logger.log("Reward: {}".format(reward))
         self.__agent.memorize(prev_state, action, next_state, reward, done)
 
@@ -190,7 +193,7 @@ class Environment:
             'uav position': next_state.position,
             'reward': reward,
             'energy': next_state.energy,
-            'energy left rate': next_state.energy_state,
+            'energy left rate': next_state.energy_state.sum(),
             'epsilon': self.__agent.epsilon
         }
         self.__persistent.save_data(persist_data)

@@ -173,7 +173,7 @@ class UAV(WorkerBase):
     def __charge(self):
         # self._energy = self.max_energy
         self.__charge_state = True
-        self._energy = max(self.max_energy, self.__energy + Energy.charge_energy_one_slot())
+        self.__energy = max(self.max_energy, self.__energy + Energy.charge_energy_one_slot())
 
     def __energy_consumption(self, move: bool):
         self.__charge_state = False
