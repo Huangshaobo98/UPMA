@@ -109,7 +109,8 @@ class Worker(WorkerBase):
         # worker节点的随机移动模型，后续可能有改动
         return MobilePolicy.random_choice(g.map_style)
 
-    def get_honest(self):
+    @property
+    def honest(self):
         return self._honest
 
     def move(self):
@@ -155,8 +156,9 @@ class UAV(WorkerBase):
     def act(self, dx_dy):
         prev_location = self.position
         # 检测是否主动作出了悬浮操作，如果是，则检查是否悬浮在可充电区域上方，是则充电；如果配置了任意单元可充电，则不需要检查充电区域
-        if dx_dy == [0, 0] and (self.__charge_everywhere or (prev_location in self.__charge_cells)):
-            self.__charge()
+        if dx_dy == [0, 0]:
+            if self.__charge_everywhere or (not self.__charge_everywhere and (prev_location in self.__charge_cells)):
+                self.__charge()
             return
 
         new_location = super(UAV, self).action(dx_dy)
@@ -173,7 +175,7 @@ class UAV(WorkerBase):
     def __charge(self):
         # self._energy = self.max_energy
         self.__charge_state = True
-        self.__energy = max(self.max_energy, self.__energy + Energy.charge_energy_one_slot())
+        self.__energy = min(self.max_energy, self.__energy + Energy.charge_energy_one_slot())
 
     def __energy_consumption(self, move: bool):
         self.__charge_state = False

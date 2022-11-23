@@ -26,7 +26,7 @@ class AoI:
         success_list = []
         fail_list = []
         for worker in workers:
-            if rand() < worker.get_honest():
+            if rand() < worker.honest:
                 self.__last_report = current_slot
                 success_list.append(worker)
             else:

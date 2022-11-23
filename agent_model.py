@@ -28,6 +28,7 @@ class State:
     max_energy = g.uav_energy
     onehot_position = g.onehot_position
     sensor_number = g.sensor_number
+    second_per_slot = g.sec_per_slot
 
     def __init__(self,
                  real_aoi: np.ndarray,
@@ -47,7 +48,7 @@ class State:
     def __str__(self):
         msg = "Position: {}, charge state: {}, energy left: {}.\r\nreal aoi:\r\n{}\r\nobservation aoi:\r\n{}"\
             .format(self.position, self.charge,
-                    self.energy, str(self.real_aoi), str(self.observation_aoi))
+                    self.energy, str(self.real_aoi_state), str(self.observation_aoi_state))
         return msg
 
     @property
@@ -56,7 +57,7 @@ class State:
 
     @property
     def real_aoi_state(self) -> np.ndarray:
-        return self.real_aoi / State.sensor_number
+        return self.real_aoi / State.sensor_number / State.second_per_slot
 
     @property
     def observation_aoi(self) -> np.ndarray:
@@ -64,7 +65,7 @@ class State:
 
     @property
     def observation_aoi_state(self) -> np.ndarray:
-        return self.__observation_aoi / State.sensor_number
+        return self.__observation_aoi / State.sensor_number / State.second_per_slot
 
     @property
     def energy(self) -> float:
@@ -80,7 +81,7 @@ class State:
 
     @property
     def charge_state(self) -> np.ndarray:
-        return np.array([1.0 if self.charge else 0.0])
+        return np.array([1.0 if self.charge else 0.0], dtype=np.float64)
 
     @property
     def position(self) -> List[int]:
