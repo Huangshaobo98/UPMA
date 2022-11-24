@@ -4,7 +4,7 @@ import random
 import numpy as np
 from collections import deque
 # from keras.models import Sequential
-
+from math import floor
 from keras.layers.core.dense import Dense
 from keras.layers.core.lambda_layer import Lambda
 from keras.layers.reshaping.flatten import Flatten
@@ -45,19 +45,13 @@ class State:
         self.__energy = energy
         self.__charge = charge
 
-    def __str__(self):
-        msg = "Position: {}, charge state: {}, energy left: {}.\r\nreal aoi:\r\n{}\r\nobservation aoi:\r\n{}"\
-            .format(self.position, self.charge,
-                    self.energy, str(self.real_aoi_state), str(self.observation_aoi_state))
-        return msg
-
     @property
     def real_aoi(self) -> np.ndarray:
         return self.__real_aoi
 
     @property
     def real_aoi_state(self) -> np.ndarray:
-        return self.real_aoi / State.sensor_number / State.second_per_slot
+        return self.real_aoi #/ State.second_per_slot  # / State.sensor_number
 
     @property
     def observation_aoi(self) -> np.ndarray:
@@ -65,7 +59,7 @@ class State:
 
     @property
     def observation_aoi_state(self) -> np.ndarray:
-        return self.__observation_aoi / State.sensor_number / State.second_per_slot
+        return self.__observation_aoi # / State.second_per_slot  # / State.sensor_number
 
     @property
     def energy(self) -> float:
@@ -196,12 +190,12 @@ class DQNAgent:
 
     def act(self, state: State):
         if self.train and np.random.rand() <= self.epsilon:
-            return random.randrange(self.action_size)
+            return random.randrange(self.action_size), []
         if self.train:
             act_values = self.model.predict(state.pack_real(), batch_size=1, verbose=0)
         else:
             act_values = self.model.predict(state.pack_observation(), batch_size=1, verbose=0)
-        return np.argmax(act_values[0])  # returns action
+        return np.argmax(act_values[0]), list(act_values[0])  # returns action
 
     @staticmethod
     def __batch_stack(minibatch):

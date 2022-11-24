@@ -8,8 +8,7 @@ from energy_model import Energy
 from persistent_model import Persistent
 from logger import Logger
 from typing import List
-import os
-
+from math import floor
 
 class Environment:
     def __init__(self, console_log: bool, file_log: bool, train: bool, continue_train: bool):
@@ -23,18 +22,17 @@ class Environment:
         self.__current_slot = 0
         self.__sum_slot = 0
         self.__max_slot = g.max_slot
-        self.__punish = g.punish
+        self.__no_power_punish = g.no_power_punish
         self.__hover_punish = g.hover_punish
         self.__batch_size = g.batch_size
         self.__episode = 0
         self.__max_episode = g.max_episode
         self.__initial_trust = g.initial_trust
 
-        self.__save_path = os.getcwd() + "/save/cell_" + str(self.__cell_limit)
         self.__train = train  # 训练模式
         self.__continue_train = continue_train  # 续训模式
-        self.__persistent = Persistent(self.__save_path, self.__train, self.__continue_train)
-        self.__logger = Logger(self.__save_path, console_log, file_log)
+        self.__persistent = Persistent(self.__train, self.__continue_train)
+        Logger.init(console_log, file_log)
 
         Energy.init()
 
@@ -50,10 +48,6 @@ class Environment:
                          for _ in range(g.worker_number)]
 
         self.__sec_per_slot = g.sec_per_slot
-
-    @property
-    def logger(self):
-        return self.__logger
 
     def get_cell_observation_aoi(self, current_slot):
         ret = np.empty((self.__cell_limit, self.__cell_limit), dtype=np.float64)
@@ -104,10 +98,10 @@ class Environment:
 
     def uav_step(self):
         # uav步进
-        self.logger.log("UAV step.")
+        Logger.log("\r\n" + "-" * 36 + " UAV step. " + "-" * 36)
         prev_state = self.get_network_state()
         # 根据上述状态，利用神经网络寻找最佳动作
-        uav_action_index = self.__agent.act(prev_state)
+        uav_action_index, action_values = self.__agent.act(prev_state)
         # 将index转换为二维方向dx_dy
         uav_action = MobilePolicy.get_action(uav_action_index, g.map_style)
         # 无人机移动，主要是动作改变和充电的工作
@@ -127,7 +121,7 @@ class Environment:
         # next_real_aoi = self.get_cell_real_aoi(self.__current_slot)
         # next_energy = self.energy_state()
 
-        return prev_state, uav_action_index, next_state
+        return prev_state, uav_action_index, action_values, next_state
 
     def reward_calculate(self, prev_state: State, next_state: State, hover: bool, charge: bool, no_power: bool):
         # reward 模型，可能后续有更改
@@ -137,28 +131,68 @@ class Environment:
         # To do: 惩罚因子仍旧有些问题，尝试一些方法解决权重相关的问题
         # reward = - np.sum(next_real_aoi) - punish - self.__hover_punish * hover
         # hover and not charge 悬浮但不充电，指的是无意义的悬浮操作
-        reward = - np.sum(next_state.real_aoi_state) - self.__punish * no_power\
+        reward = - np.sum(next_state.real_aoi_state) - self.__no_power_punish * no_power\
                  - self.__hover_punish * (hover and not charge)
 
         return reward
 
     def workers_step(self):
-        self.logger.log("Workers step.")
+        Logger.log("\r\n" + "-" * 34 + " Workers step. " + "-" * 34)
         cell_pos_to_refresh = set()
         for worker in self.__worker:
             [x, y] = worker.move()
             if worker.work(self.__cell[x][y]):
                 cell_pos_to_refresh.add((x, y))
-        if len(cell_pos_to_refresh) > 0:
-            self.logger.log("Workers work position: {}.".format(cell_pos_to_refresh))
-        else:
-            self.logger.log("Workers do not work.")
+        if len(cell_pos_to_refresh) == 0:
+            Logger.log("No workers are working.")
         for tup in cell_pos_to_refresh:
             self.__cell[tup[0]][tup[1]].worker_visited(self.__current_slot)
 
     def worker_trust_refresh(self):
         for work in self.__worker:
             work.update_trust()
+
+    @staticmethod
+    def uav_step_state_detail(prev_state: State, next_state: State,
+                              action: List[int], action_values: List[float], reward: float, epsilon: float):
+        act_msg = "1. Action details: \r\n"
+        if len(action_values) == 0:
+            act_msg += "Random action, selected action: {}.\r\n\r\n".format(action)
+        else:
+            act_msg += "Action values: {}, selected action: {}.\r\n\r\n".format(action_values, action)
+
+        uav_msg = "2. Agent(UAV) state details: \r\n" \
+                  + "Position state: {} -> {}, charge state: {} -> {}, " \
+                    "energy state: {:.4f} -> {:.4f}, reward: {}, "\
+                    "random action rate: {:.6f}.\r\n\r\n"\
+                      .format(prev_state.position, next_state.position,
+                              prev_state.charge, next_state.charge,
+                              prev_state.energy, next_state.energy,
+                              reward, epsilon)
+
+        env_msg = "3. Age of Information(AoI) state: \r\n"
+        real_aoi_msg = ""
+        observation_aoi_msg = ""
+
+        prev_real_aoi_list = str(prev_state.real_aoi_state).split('\n')
+        next_real_aoi_list = str(next_state.real_aoi_state).split('\n')
+        prev_observation_aoi_list = str(prev_state.observation_aoi_state).split('\n')
+        next_observation_aoi_list = str(next_state.observation_aoi_state).split('\n')
+
+        for prev_real_aoi, next_real_aoi, prev_observation_aoi, next_observation_aoi\
+                in zip(prev_real_aoi_list, next_real_aoi_list, prev_observation_aoi_list, next_observation_aoi_list):
+            real_aoi_msg += (str(prev_real_aoi) + "\t\t|\t" + str(next_real_aoi) + "\r\n")
+            observation_aoi_msg += (str(prev_observation_aoi) + "\t\t|\t" + str(next_observation_aoi) + "\r\n")
+
+        real_aoi_tab_num = max(floor((real_aoi_msg.find('\t') - len("Prev real AoI state: ")) / 4) + 2, 1)
+        observation_aoi_tab_num = max(floor((observation_aoi_msg.find('\t') - len("Prev observation AoI state: ")) / 4) + 2, 1)
+        real_aoi_msg = "Prev real AoI state: " + "\t" * real_aoi_tab_num \
+                       + "|\tNext real AoI state: \n" + real_aoi_msg
+        observation_aoi_msg = "Prev observation AoI state: " + "\t" * observation_aoi_tab_num \
+                              + "|\tNext observation AoI state: \n" + observation_aoi_msg
+
+        env_msg += (real_aoi_msg + "\r\n" + observation_aoi_msg)
+        return act_msg + uav_msg + env_msg
 
     def slot_step(self):
         # 整合test和train的slot步进方法
@@ -169,9 +203,9 @@ class Environment:
         # prev_position, next_position, prev_energy, next_energy, \
         # prev_charge_state, next_charge_state, uav_action_index = self.uav_step()  # 根据训练/测试方式，选择按观测aoi/实际aoi作为输入
 
-        prev_state, action, next_state = self.uav_step()
-        self.logger.log("State before UAV action:\r\n" + str(prev_state))
-        self.logger.log("State after UAV action:\r\n" + str(next_state))
+        prev_state, action, action_values, next_state = self.uav_step()
+        # Logger.log("State before UAV action: " + str(prev_state))
+        # Logger.log("State after UAV action: " + str(next_state))
         if self.__current_slot >= self.__max_slot or next_state.energy <= 0.0:  # 这里需要考虑电量问题?电量不足时是否直接结束状态
             done = True
 
@@ -181,7 +215,7 @@ class Environment:
         no_power = next_state.energy <= 0.0
         reward = self.reward_calculate(prev_state, next_state, hover, charge, no_power)
 
-        self.logger.log("Reward: {}".format(reward))
+        Logger.log(Environment.uav_step_state_detail(prev_state, next_state, action, action_values, reward, self.__agent.epsilon))
         self.__agent.memorize(prev_state, action, next_state, reward, done)
 
         persist_data = {
@@ -224,16 +258,18 @@ class Environment:
         for slot in range(1, self.__max_slot + 1):
             self.__current_slot = slot
             self.__sum_slot += 1
-            self.logger.log("Episode {}, slot {}, sum slot {} begin."
-                            .format(self.__episode, self.__current_slot, self.__sum_slot))
+            Logger.log(("=" * 84 + "\r\n" + "{:^84}\r\n" + "=" * 84)
+                            .format("Episode: {}, slot: {}, sum slot: {}."
+                                    .format(self.__episode, self.__current_slot, self.__sum_slot)
+                                    )
+                            )
             if self.slot_step():
                 break
-        self.logger.log("===========================Episode {} end.===========================".format(self.__episode))
         self.clear()
         self.__agent.save(self.__persistent.model_path())
 
     def start(self):
-        np.set_printoptions(suppress=True,precision=3)
+        np.set_printoptions(suppress=True, precision=3)
         for episode in range(1, self.__max_episode + 1):
             self.__episode = episode
             self.episode_step()

@@ -1,28 +1,45 @@
 # 感觉也并不需要logging，简单实现一个能向控制台打印当前状态的日志器就行了
 import os
-import time
-
+import datetime
+from global_parameter import Global as g
 
 class Logger:
-    def __init__(self, directory: str, console_log: bool, file_log: bool):
-        self.__console_log = console_log
-        self.__file_log = file_log
-        self.__log_directory = directory + "/log"
-        log_time = time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime(time.time()))
-        self.__log_path = self.__log_directory + "/log_" + log_time + ".txt"
-        if not os.path.exists(self.__log_directory):
-            os.makedirs(self.__log_directory)
-        self.__log_handle = open(self.__log_path, "w") if file_log else None
+    __console_log = g.default_console_log
+    __file_log = g.default_file_log
+    __log_directory = g.default_save_path + "/log"
+    __log_path = __log_directory + "/log_" + datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f') + ".txt"
+    __log_handle = None
 
-    def file_log(self, msg: str):
-        if self.__file_log:
-            self.__log_handle.write(msg)
+    @staticmethod
+    def init(console_log: bool, file_log: bool, directory=""):
+        if not directory == "": # 用户自定义日志存储目录
+            Logger.__log_directory = directory + "/log"
+            Logger.__log_path = Logger.__log_directory + "/log_" \
+                                + datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f') + ".txt"
 
-    def console_log(self, msg: str):
-        if self.__console_log:
+        if not os.path.exists(Logger.__log_directory):
+            os.makedirs(Logger.__log_directory)
+
+        Logger.__console_log = console_log
+        Logger.__file_log = file_log
+        Logger.__log_handle = open(Logger.__log_path, "w") if Logger.__file_log else None
+        assert (Logger.__file_log and Logger.__log_handle is not None) or (not Logger.__file_log)
+
+    @staticmethod
+    def file_log(msg: str):
+        if Logger.__file_log:
+            Logger.__log_handle.write(msg)
+
+    @staticmethod
+    def console_log(msg: str):
+        if Logger.__console_log:
             print(msg)
 
-    def log(self, msg: str):
-        log_time = time.strftime("%Y-%m-%d %H-%M-%S", time.localtime(time.time()))
-        self.file_log(log_time + ": " + msg + "\r\n")
-        self.console_log(log_time + ": " + msg)
+    @staticmethod
+    def log(msg: str):
+        Logger.file_log(msg + "\n")
+        Logger.console_log(msg)
+
+    @staticmethod
+    def log_time():
+        return datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')

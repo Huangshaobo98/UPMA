@@ -6,8 +6,11 @@ from collections import defaultdict
 class Sensor:
     __location_x = []
     __location_y = []
+    __num_index = 0
 
     def __init__(self, x_location: float, y_location: float, cell_x: int, cell_y: int):
+        self.__id = Sensor.__num_index
+        Sensor.__num_index += 1
         self.__x = x_location
         self.__y = y_location
         self.__cell_x = cell_x
@@ -24,6 +27,10 @@ class Sensor:
 
     def __eq__(self, other):
         return id(self) == id(other)
+
+    @property
+    def index(self):
+        return self.__id
 
     def get_observation_aoi(self, cur_slot):
         return self.__aoi.get_observation_aoi(cur_slot)

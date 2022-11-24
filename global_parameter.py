@@ -1,5 +1,5 @@
 from math import sqrt
-
+import os
 
 class Global:
     # 网络模型相关
@@ -24,12 +24,12 @@ class Global:
     uav_energy = 20             # Wh
     uav_start_fix = True        # 无人机初始位置是否固定
     uav_start_location = [0, 0]
-    hover_punish = 9            # 悬停惩罚
+    hover_punish = sensor_number            # 悬停惩罚
     charge_everywhere = True    # 是否可以任意位置充电
 
     # 训练相关
     max_slot = 5000             # 最大时隙
-    punish = 36                 # 惩罚因子？
+    no_power_punish = sensor_number * cell_limit * cell_limit      # 惩罚因子？
     batch_size = 256            # 批大小
     # charge_time = 60          # 充电耗时(废弃参数)
     max_episode = 1000          # 最大训练episode
@@ -41,11 +41,16 @@ class Global:
     # 其他参数(基于上述参数计算得到的)，在init中进行初始化
     sec_per_slot = cell_length / uav_speed * (sqrt(3) if map_style == 'h' else 1)
 
+    # 存储路径参数
+    default_save_path = os.getcwd() + "/save/cell_" + str(cell_limit)
+
+    # 持久化参数
+    default_train = True
+    default_continue_train = False
+
     # 日志配置参数
     default_file_log = False
     default_console_log = True
-    default_train = True
-    default_continue_train = False
 
     # init方法只用来检测是否正确的初始化了，可能后续有一些参数需要进行验证?
     @staticmethod

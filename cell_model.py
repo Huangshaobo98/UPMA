@@ -18,6 +18,10 @@ class Cell:
             self.__y_location = self.__length * self.__y
         self.__sensors = []
 
+    @property
+    def index(self):
+        return [self.__x, self.__y]
+
     def clear(self):
         for sensor in self.__sensors:
             sensor.clear()
@@ -29,7 +33,8 @@ class Cell:
         self.__x = x
         self.__y = y
 
-    def get_position(self):
+    @property
+    def position(self):
         return self.__x_location, self.__y_location
 
     def get_sensor_positions(self):
@@ -107,7 +112,7 @@ def uniform_generator(seed=10):
         assert False
 
     for i in range(sensor_number):
-        [cell_location_x, cell_location_y] = ret_cell[sensor_cell_x[i]][sensor_cell_y[i]].get_position()
+        cell_location_x, cell_location_y = ret_cell[sensor_cell_x[i]][sensor_cell_y[i]].position
         sen = Sensor(sensor_x_diff[i] + cell_location_x, sensor_y_diff[i] + cell_location_y,
                      sensor_cell_x[i], sensor_cell_y[i])
         ret_cell[sensor_cell_x[i]][sensor_cell_y[i]].add_sensor(sen)

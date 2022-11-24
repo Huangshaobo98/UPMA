@@ -2,6 +2,7 @@ from random import random as rand
 from random import choice, sample, randint
 from global_parameter import Global as g
 from energy_model import Energy
+from logger import Logger
 
 
 class MobilePolicy:
@@ -92,7 +93,7 @@ class Worker(WorkerBase):
                  work_rate: float
                  ):
         super(Worker, self).__init__(x_start, y_start, worker_initial_trust, out_able, g.worker_start_fix)
-        self.id = Worker.__index
+        self._id = Worker.__index
         Worker.__index += 1
         self._work_rate = work_rate
         self._honest = 1    # ?
@@ -110,6 +111,10 @@ class Worker(WorkerBase):
         return MobilePolicy.random_choice(g.map_style)
 
     @property
+    def index(self):
+        return self._id
+
+    @property
     def honest(self):
         return self._honest
 
@@ -121,7 +126,10 @@ class Worker(WorkerBase):
         if rand() > self._work_rate:  # 假设工作率是80%，表明在本slot内，80%会执行采集任务
             return False
         sensors = cell.get_sensors()
-        selected_sensors = sample(sensors, randint(0, len(sensors)))
+        selected_sensors = sample(sensors, randint(1, len(sensors)))
+        sensor_index = [sensor.index for sensor in selected_sensors]
+        Logger.log("Worker {} sampled at cell {}, sampled number: {}, sampled sensor list: {}"
+                   .format(self.index, cell.index, len(sensor_index), sensor_index))
         if len(selected_sensors) > 0:
             for sensor in selected_sensors:
                 sensor.add_worker(self)
@@ -159,7 +167,7 @@ class UAV(WorkerBase):
         if dx_dy == [0, 0]:
             if self.__charge_everywhere or (not self.__charge_everywhere and (prev_location in self.__charge_cells)):
                 self.__charge()
-            return
+                return
 
         new_location = super(UAV, self).action(dx_dy)
         self.__energy_consumption(prev_location == new_location)
