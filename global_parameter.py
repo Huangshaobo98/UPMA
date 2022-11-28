@@ -1,5 +1,6 @@
-from math import sqrt
+from math import sqrt, log, exp
 import os
+
 
 class Global:
     # 网络模型相关
@@ -24,16 +25,19 @@ class Global:
     uav_energy = 20             # Wh
     uav_start_fix = True        # 无人机初始位置是否固定
     uav_start_location = [0, 0]
-    hover_punish = sensor_number            # 悬停惩罚
+    hover_punish = 1            # 悬停惩罚
     charge_everywhere = True    # 是否可以任意位置充电
 
     # 训练相关
-    max_slot = 5000             # 最大时隙
-    no_power_punish = sensor_number * cell_limit * cell_limit      # 惩罚因子？
+    max_slot = 3000            # 最大时隙
+    no_power_punish = cell_limit * cell_limit      # 无电量惩罚
     batch_size = 256            # 批大小
     # charge_time = 60          # 充电耗时(废弃参数)
     max_episode = 1000          # 最大训练episode
     onehot_position = True      # 位置编码为onehot形式
+    energy_reward_point = [0.1, -0.1]    # 能量低于point[0]时，reward下降point[1]
+    energy_reward_coefficient = -log(energy_reward_point[0] / (2 + energy_reward_point[1])) \
+                                / energy_reward_point[1]
 
     # 充电位置
     charge_cells = [[1, 1], [4, 4], [1, 4], [4, 1]]     # 待设置的参数
@@ -52,6 +56,9 @@ class Global:
     default_file_log = False
     default_console_log = True
 
+    # 数据分析模式，开启此状态将读取训练/测试数据进行数据分析，绘图等工作
+    default_analysis = False
+
     # init方法只用来检测是否正确的初始化了，可能后续有一些参数需要进行验证?
     @staticmethod
     def init():
@@ -65,3 +72,8 @@ class Global:
         assert type(Global.max_slot) is int
         assert type(Global.max_episode) is int
         assert type(Global.batch_size) is int
+
+    @staticmethod
+    def energy_reward_calculate(x):
+        return - 2 * exp(Global.energy_reward_coefficient * x) \
+                                        / (1 + exp(Global.energy_reward_coefficient * x))

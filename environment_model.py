@@ -1,4 +1,5 @@
 from cell_model import uniform_generator
+from sensor_model import Sensor
 from worker_model import UAV, Worker, MobilePolicy
 from random import randint
 from global_parameter import Global as g
@@ -10,8 +11,15 @@ from logger import Logger
 from typing import List
 from math import floor
 
+
 class Environment:
-    def __init__(self, console_log: bool, file_log: bool, train: bool, continue_train: bool):
+    def __init__(self,
+                 train: bool,
+                 continue_train: bool):
+
+        self.__train = train  # 训练模式
+        self.__continue_train = continue_train  # 续训模式
+
         self.__cell_limit = g.cell_limit
         self.__charge_cells = g.charge_cells
         self.__uav_fix = g.uav_start_fix
@@ -26,19 +34,19 @@ class Environment:
         self.__hover_punish = g.hover_punish
         self.__batch_size = g.batch_size
         self.__episode = 0
-        self.__max_episode = g.max_episode
+        self.__max_episode = g.max_episode if train else 1
         self.__initial_trust = g.initial_trust
 
-        self.__train = train  # 训练模式
-        self.__continue_train = continue_train  # 续训模式
-        self.__persistent = Persistent(self.__train, self.__continue_train)
-        Logger.init(console_log, file_log)
+        self.__episode_real_aoi = []
+        self.__episode_observation_aoi = []
+        self.__episode_energy = []
+        self.__episode_reward = []
 
         Energy.init()
 
         # agent
         self.__agent = DQNAgent(self.__cell_limit, action_size,
-                                train=train, continue_train=continue_train, model_path=self.__persistent.model_path())
+                                train=train, continue_train=continue_train, model_path=Persistent.model_path())
 
         # network model
         self.__cell = uniform_generator()
@@ -48,6 +56,9 @@ class Environment:
                          for _ in range(g.worker_number)]
 
         self.__sec_per_slot = g.sec_per_slot
+
+        sensor_x, sensor_y = Sensor.get_all_locations()
+        Persistent.save_network_model(g.cell_length, g.cell_limit, np.stack([sensor_x, sensor_y]))
 
     def get_cell_observation_aoi(self, current_slot):
         ret = np.empty((self.__cell_limit, self.__cell_limit), dtype=np.float64)
@@ -83,23 +94,31 @@ class Environment:
     def charge_state(self):
         return self.__uav.get_charge_state
 
-    def get_network_state(self) -> State:
-        # 获取网络当前观测aoi/实际aoi/无人机位置/能量信息
-        observation_aoi = self.get_cell_observation_aoi(self.__current_slot)  # 观测aoi
-        real_aoi = self.get_cell_real_aoi(self.__current_slot)  # 实际aoi
+    def get_network_state(self, slot: int) -> State:
+        # 获取网络观测aoi/实际aoi/无人机位置/能量信息
+        observation_aoi = self.get_cell_observation_aoi(slot)  # 观测aoi
+        real_aoi = self.get_cell_real_aoi(slot)  # 实际aoi
         position_state = self.position_state  # uav位置
         energy_state = self.energy_state  # 能量
         charge_state = self.charge_state
         return State(real_aoi, observation_aoi, position_state, energy_state, charge_state)
 
+    def get_current_network_state(self) -> State:
+        # 获取当前(“当前”指的是无人机移动前)网络状态信息
+        return self.get_network_state(self.__current_slot)
+
+    def get_next_network_state(self) -> State:
+        # 获取无人机移动后网络状态信息
+        return self.get_network_state(self.__current_slot + 1)
+
     def cell_update_by_uav(self):
         uav_position = self.position_state   # 获取无人机的位置信息
-        self.__cell[uav_position[0]][uav_position[1]].uav_visited(self.__current_slot)  # 小区更新，无人机访问
+        self.__cell[uav_position[0]][uav_position[1]].uav_visited(self.__current_slot + 1)  # note: 无人机需要在下个时隙才能到达目标
 
     def uav_step(self):
         # uav步进
         Logger.log("\r\n" + "-" * 36 + " UAV step. " + "-" * 36)
-        prev_state = self.get_network_state()
+        prev_state = self.get_current_network_state()
         # 根据上述状态，利用神经网络寻找最佳动作
         uav_action_index, action_values = self.__agent.act(prev_state)
         # 将index转换为二维方向dx_dy
@@ -109,7 +128,7 @@ class Environment:
         # 无人机执行所在小区的数据收集/评估worker的信任等工作
         self.cell_update_by_uav()
 
-        next_state = self.get_network_state()
+        next_state = self.get_next_network_state()
 
         # hover = True if charge_state or ((prev_position == next_position).all()) else False   # 悬浮状态需要计算
 
@@ -123,7 +142,7 @@ class Environment:
 
         return prev_state, uav_action_index, action_values, next_state
 
-    def reward_calculate(self, prev_state: State, next_state: State, hover: bool, charge: bool, no_power: bool):
+    def reward_calculate(self, prev_state: State, next_state: State, hover: bool, charge: bool):
         # reward 模型，可能后续有更改
         # punish = self.__punish if next_energy <= 0 else 0
         # 因为这里是训练得到的reward，因此用real_aoi进行计算
@@ -131,7 +150,8 @@ class Environment:
         # To do: 惩罚因子仍旧有些问题，尝试一些方法解决权重相关的问题
         # reward = - np.sum(next_real_aoi) - punish - self.__hover_punish * hover
         # hover and not charge 悬浮但不充电，指的是无意义的悬浮操作
-        reward = - np.sum(next_state.real_aoi_state) - self.__no_power_punish * no_power\
+        reward = - np.sum(next_state.real_aoi_state) \
+                 + self.__no_power_punish * g.energy_reward_calculate(next_state.energy_state[0]) \
                  - self.__hover_punish * (hover and not charge)
 
         return reward
@@ -212,11 +232,16 @@ class Environment:
         hover = True if (prev_state.position == next_state.position
                          and next_state.position not in self.__charge_cells) else False
         charge = self.charge_state
-        no_power = next_state.energy <= 0.0
-        reward = self.reward_calculate(prev_state, next_state, hover, charge, no_power)
+        reward = self.reward_calculate(prev_state, next_state, hover, charge)
 
         Logger.log(Environment.uav_step_state_detail(prev_state, next_state, action, action_values, reward, self.__agent.epsilon))
-        self.__agent.memorize(prev_state, action, next_state, reward, done)
+        if self.__train:
+            self.__agent.memorize(prev_state, action, next_state, reward, done)
+
+        self.__episode_real_aoi.append(np.sum(next_state.real_aoi))
+        self.__episode_observation_aoi.append(np.sum(next_state.observation_aoi))
+        self.__episode_energy.append(next_state.energy)
+        self.__episode_reward.append(reward)
 
         persist_data = {
             'episode': self.__episode,
@@ -227,20 +252,21 @@ class Environment:
             'average observation aoi': np.average(next_state.observation_aoi),
             'hover': hover,
             'charge': self.charge_state,
-            'uav position': next_state.position,
+            'uav position x': next_state.position[0],
+            'uav position y': next_state.position[1],
             'reward': reward,
             'energy': next_state.energy,
             'energy left rate': next_state.energy_state.sum(),
             'epsilon': self.__agent.epsilon
         }
-        self.__persistent.save_data(persist_data)
+        Persistent.save_data(persist_data)
 
         self.worker_trust_refresh()  # worker信任刷新
 
-        if self.__sum_slot % 100 == 0:
+        if self.__train and self.__sum_slot % 100 == 0:
             self.__agent.update_target_model()
 
-        if len(self.__agent.memory) >= self.__batch_size:
+        if self.__train and len(self.__agent.memory) >= self.__batch_size:
             self.__agent.replay(self.__batch_size)
 
         return done
@@ -253,8 +279,13 @@ class Environment:
         for work in self.__worker:
             work.clear()
         self.__uav.clear()
+        self.__episode_real_aoi.clear()
+        self.__episode_observation_aoi.clear()
+        self.__episode_energy.clear()
+        self.__episode_reward.clear()
 
     def episode_step(self):
+        begin_slot = self.__sum_slot
         for slot in range(1, self.__max_slot + 1):
             self.__current_slot = slot
             self.__sum_slot += 1
@@ -265,8 +296,18 @@ class Environment:
                             )
             if self.slot_step():
                 break
+        episode_data = {
+            'episode': self.__episode,
+            'average real aoi': np.average(self.__episode_real_aoi),
+            'average observation aoi': np.average(self.__episode_observation_aoi),
+            'average energy': np.average(self.__episode_energy),
+            'average reward': np.average(self.__episode_reward),
+            'begin slot': begin_slot,
+            'slot number': self.__current_slot
+        }
+        Persistent.save_episode_data(episode_data)
         self.clear()
-        self.__agent.save(self.__persistent.model_path())
+        self.__agent.save(Persistent.model_path())
 
     def start(self):
         np.set_printoptions(suppress=True, precision=3)

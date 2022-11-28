@@ -15,3 +15,5 @@ def plot_figure(cells: List[List[Cell]]):
             cell.plot_cell(ax)
     ax.scatter(sensor_x, sensor_y, color='r')
     plt.show()
+
+def plot_curve():
