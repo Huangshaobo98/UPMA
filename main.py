@@ -5,10 +5,12 @@ from agent_model import State
 from persistent_model import Persistent
 from logger import Logger
 from analysis import Analysis
+import tensorflow as tf
 import sys
 
 if __name__ == '__main__':
 
+    tf.config.set_visible_devices(tf.config.list_physical_devices("CPU"))
     commands = sys.argv[1:]
     parameters = command_parse()
     Persistent.init(analysis=parameters['analysis'],

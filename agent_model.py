@@ -2,22 +2,12 @@
 import random
 import numpy as np
 from collections import deque
-from keras.layers.core.dense import Dense
-from keras.layers.core.lambda_layer import Lambda
-from keras.layers.reshaping.flatten import Flatten
-from keras.engine.input_layer import Input
-from keras.layers.regularization.dropout import Dropout
-from keras.layers.pooling.max_pooling2d import MaxPool2D
-from keras.optimizers.optimizer_v2.adam import Adam
-from keras.engine.training import Model
-import keras.backend as K
+from tensorflow.python.keras.layers import Dense, Flatten, Lambda, Dropout, MaxPool2D, Input
+from tensorflow.python.keras.optimizer_v2.adam import Adam
+from tensorflow.python.keras.engine.training import Model
+import tensorflow.python.keras.backend as K
 from typing import List
-# from time import time
 from global_parameter import Global as g
-# from keras.callbacks import TensorBoard
-# from keras.utils.vis_utils import plot_model
-from math import floor
-# EPISODES = 5000
 
 
 class State:
