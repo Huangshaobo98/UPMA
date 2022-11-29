@@ -1,64 +1,82 @@
-from cell_model import uniform_generator
 from sensor_model import Sensor
-from worker_model import UAV, Worker, MobilePolicy
+from cell_model import Cell
+from worker_model import WorkerBase, UAV, Worker, MobilePolicy
 from random import randint
 from global_parameter import Global as g
 from agent_model import DQNAgent, State
 import numpy as np
-from energy_model import Energy
 from persistent_model import Persistent
 from logger import Logger
 from typing import List
-from math import floor
 
 
 class Environment:
     def __init__(self,
                  train: bool,
-                 continue_train: bool):
+                 continue_train: bool,
+                 sensor_number: int,
+                 worker_number: int,
+                 cell_limit: int,
+                 max_episode: int,
+                 max_slot: int,
+                 batch_size: int,
+                 epsilon_decay: float,
+                 learn_rate: float,
+                 gamma: float,
+                 detail: bool
+                 ):
+
+        # 一些比较固定的参数
+        self.__charge_cells = g.charge_cells
+        self.__uav_fix = g.uav_start_fix
+        self.__uav_start_location = g.uav_start_location
+        self.__initial_trust = g.initial_trust
 
         self.__train = train  # 训练模式
         self.__continue_train = continue_train  # 续训模式
 
-        self.__cell_limit = g.cell_limit
-        self.__charge_cells = g.charge_cells
-        self.__uav_fix = g.uav_start_fix
-        self.__uav_start_location = g.uav_start_location
-        self.__sensor_number = g.sensor_number
+        self.__sensor_number = sensor_number
+        self.__worker_number = worker_number
+        self.__cell_limit = cell_limit
+
+        self.__detail = detail
         action_size = 7 if g.map_style == 'h' else 5
 
+        # 训练相关
+        self.__max_episode = max_episode if train else 1
+        self.__episode = 0
+        self.__max_slot = max_slot
         self.__current_slot = 0
         self.__sum_slot = 0
-        self.__max_slot = g.max_slot
-        self.__no_power_punish = g.no_power_punish
-        self.__hover_punish = g.hover_punish
-        self.__batch_size = g.batch_size
-        self.__episode = 0
-        self.__max_episode = g.max_episode if train else 1
-        self.__initial_trust = g.initial_trust
 
+        # reward相关
+        self.__no_power_punish = self.__cell_limit * self.__cell_limit
+        self.__hover_punish = 1
+        self.__batch_size = batch_size
+
+        # episode data for persistent
         self.__episode_real_aoi = []
         self.__episode_observation_aoi = []
         self.__episode_energy = []
         self.__episode_reward = []
 
-        Energy.init()
-
         # agent
         self.__agent = DQNAgent(self.__cell_limit, action_size,
+                                gamma=gamma, epsilon_decay=epsilon_decay, lr=learn_rate,
                                 train=train, continue_train=continue_train, model_path=Persistent.model_path())
 
         # network model
-        self.__cell = uniform_generator()
-        self.__uav = UAV(randint(0, self.__cell_limit - 1), randint(0, self.__cell_limit - 1))
+        self.__cell = Cell.uniform_generator(self.__cell_limit, g.cell_length, self.__sensor_number)
+        WorkerBase.set_cell_limit(self.__cell_limit)
+        self.__uav = UAV(0, 0)
         self.__worker = [Worker(randint(0, self.__cell_limit - 1), randint(0, self.__cell_limit - 1),
-                                g.worker_initial_trust, g.out_able, g.worker_work_rate)
-                         for _ in range(g.worker_number)]
+                                g.worker_initial_trust, g.worker_out_able, g.worker_work_rate)
+                         for _ in range(self.__worker_number)]
 
         self.__sec_per_slot = g.sec_per_slot
 
         sensor_x, sensor_y = Sensor.get_all_locations()
-        Persistent.save_network_model(g.cell_length, g.cell_limit, np.stack([sensor_x, sensor_y]))
+        Persistent.save_network_model(g.cell_length, self.__cell_limit, np.stack([sensor_x, sensor_y]))
 
     def get_cell_observation_aoi(self, current_slot):
         ret = np.empty((self.__cell_limit, self.__cell_limit), dtype=np.float64)
@@ -172,9 +190,9 @@ class Environment:
         for work in self.__worker:
             work.update_trust()
 
-    @staticmethod
-    def uav_step_state_detail(prev_state: State, next_state: State,
-                              action: List[int], action_values: List[float], reward: float, epsilon: float):
+    def uav_step_state_detail(self, prev_state: State, next_state: State,
+                              action: List[int], action_values: List[float], reward: float, epsilon: float
+                              ):
         act_msg = "1. Action details: \r\n"
         if len(action_values) == 0:
             act_msg += "Random action, selected action: {}.\r\n\r\n".format(action)
@@ -183,35 +201,40 @@ class Environment:
 
         uav_msg = "2. Agent(UAV) state details: \r\n" \
                   + "Position state: {} -> {}, charge state: {} -> {}, " \
-                    "energy state: {:.4f} -> {:.4f}, reward: {}, "\
+                    "energy state: {:.4f} -> {:.4f}, reward: {:.4f}, "\
                     "random action rate: {:.6f}.\r\n\r\n"\
                       .format(prev_state.position, next_state.position,
                               prev_state.charge, next_state.charge,
                               prev_state.energy, next_state.energy,
                               reward, epsilon)
 
-        env_msg = "3. Age of Information(AoI) state: \r\n"
-        real_aoi_msg = ""
-        observation_aoi_msg = ""
+        env_msg = "3. Age of Information(AoI) state: \r\n" \
+                     + "Average real aoi state: {:.4f} -> {:.4f}, average observation state: {:.4f} -> {:.4f}\r\n" \
+                          .format(prev_state.average_real_aoi_state, prev_state.average_observation_aoi_state,
+                                next_state.average_real_aoi_state, next_state.average_observation_aoi_state)
 
-        prev_real_aoi_list = str(prev_state.real_aoi_state).split('\n')
-        next_real_aoi_list = str(next_state.real_aoi_state).split('\n')
-        prev_observation_aoi_list = str(prev_state.observation_aoi_state).split('\n')
-        next_observation_aoi_list = str(next_state.observation_aoi_state).split('\n')
+        if self.__detail:   # 这里显示日志
+            real_aoi_msg = ""
+            observation_aoi_msg = ""
 
-        for prev_real_aoi, next_real_aoi, prev_observation_aoi, next_observation_aoi\
-                in zip(prev_real_aoi_list, next_real_aoi_list, prev_observation_aoi_list, next_observation_aoi_list):
-            real_aoi_msg += (str(prev_real_aoi) + "\t\t|\t" + str(next_real_aoi) + "\r\n")
-            observation_aoi_msg += (str(prev_observation_aoi) + "\t\t|\t" + str(next_observation_aoi) + "\r\n")
+            prev_real_aoi_list = str(prev_state.real_aoi_state).split('\n')
+            next_real_aoi_list = str(next_state.real_aoi_state).split('\n')
+            prev_observation_aoi_list = str(prev_state.observation_aoi_state).split('\n')
+            next_observation_aoi_list = str(next_state.observation_aoi_state).split('\n')
 
-        real_aoi_tab_num = max(floor((real_aoi_msg.find('\t') - len("Prev real AoI state: ")) / 4) + 2, 1)
-        observation_aoi_tab_num = max(floor((observation_aoi_msg.find('\t') - len("Prev observation AoI state: ")) / 4) + 2, 1)
-        real_aoi_msg = "Prev real AoI state: " + "\t" * real_aoi_tab_num \
-                       + "|\tNext real AoI state: \n" + real_aoi_msg
-        observation_aoi_msg = "Prev observation AoI state: " + "\t" * observation_aoi_tab_num \
-                              + "|\tNext observation AoI state: \n" + observation_aoi_msg
+            for prev_real_aoi, next_real_aoi, prev_observation_aoi, next_observation_aoi\
+                    in zip(prev_real_aoi_list, next_real_aoi_list, prev_observation_aoi_list, next_observation_aoi_list):
+                real_aoi_msg += (str(prev_real_aoi) + "\t\t|\t" + str(next_real_aoi) + "\r\n")
+                observation_aoi_msg += (str(prev_observation_aoi) + "\t\t|\t" + str(next_observation_aoi) + "\r\n")
 
-        env_msg += (real_aoi_msg + "\r\n" + observation_aoi_msg)
+            real_aoi_space_number = max(real_aoi_msg.find('\t') - len("Prev real AoI state: "), 0)
+            observation_aoi_space_num = max(observation_aoi_msg.find('\t') - len("Prev observation AoI state: "), 0)
+            real_aoi_msg = "Prev real AoI state: " + " " * real_aoi_space_number \
+                           + "\t\t|\tNext real AoI state: \n" + real_aoi_msg
+            observation_aoi_msg = "Prev observation AoI state: " + " " * observation_aoi_space_num \
+                                  + "\t\t|\tNext observation AoI state: \n" + observation_aoi_msg
+
+            env_msg += (real_aoi_msg + "\r\n" + observation_aoi_msg)
         return act_msg + uav_msg + env_msg
 
     def slot_step(self):
@@ -234,7 +257,7 @@ class Environment:
         charge = self.charge_state
         reward = self.reward_calculate(prev_state, next_state, hover, charge)
 
-        Logger.log(Environment.uav_step_state_detail(prev_state, next_state, action, action_values, reward, self.__agent.epsilon))
+        Logger.log(self.uav_step_state_detail(prev_state, next_state, action, action_values, reward, self.__agent.epsilon))
         if self.__train:
             self.__agent.memorize(prev_state, action, next_state, reward, done)
 

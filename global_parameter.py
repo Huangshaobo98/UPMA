@@ -1,43 +1,36 @@
 from math import sqrt, log, exp
 import os
 
+# 用于存储一些非命令行调整的参数
+# 前缀加default表示默认参数，实际参数可能不与默认参数一致
+
 
 class Global:
     # 网络模型相关
     map_style = 'h'             # 地图类型h: 六边形 g: 栅格
-    cell_limit = 6              # 边界大小
     cell_length = 600           # 小区边长 m
-    out_able = True             # 可移动离开所观测小区
 
     # worker相关
-    worker_number = 2
+    worker_out_able = True  # 可移动离开所观测小区
     worker_initial_trust = 0.5
     worker_activity = 0.4       # 活跃度，每轮以此概率移动
     initial_trust = 0.5
     worker_work_rate = 0.6      # worker在每个时隙下工作的概率
     worker_start_fix = False
 
-    # 传感器相关
-    sensor_number = 500
-
     # 无人机相关
     uav_speed = 15              # m/s
     uav_energy = 20             # Wh
     uav_start_fix = True        # 无人机初始位置是否固定
     uav_start_location = [0, 0]
-    hover_punish = 1            # 悬停惩罚
     charge_everywhere = True    # 是否可以任意位置充电
 
     # 训练相关
-    max_slot = 3000            # 最大时隙
-    no_power_punish = cell_limit * cell_limit      # 无电量惩罚
-    batch_size = 256            # 批大小
     # charge_time = 60          # 充电耗时(废弃参数)
-    max_episode = 1000          # 最大训练episode
+
     onehot_position = True      # 位置编码为onehot形式
     energy_reward_point = [0.1, -0.1]    # 能量低于point[0]时，reward下降point[1]
-    energy_reward_coefficient = -log(energy_reward_point[0] / (2 + energy_reward_point[1])) \
-                                / energy_reward_point[1]
+    energy_reward_coefficient = -log(energy_reward_point[0] / (2 + energy_reward_point[1])) / energy_reward_point[1]
 
     # 充电位置
     charge_cells = [[1, 1], [4, 4], [1, 4], [4, 1]]     # 待设置的参数
@@ -45,8 +38,17 @@ class Global:
     # 其他参数(基于上述参数计算得到的)，在init中进行初始化
     sec_per_slot = cell_length / uav_speed * (sqrt(3) if map_style == 'h' else 1)
 
-    # 存储路径参数
-    default_save_path = os.getcwd() + "/save/cell_" + str(cell_limit)
+    # 下列参数为可以通过命令行自由调整的参数
+    default_cell_limit = 6          # 边界大小
+    default_sensor_number = 500     # 传感器数量
+    default_worker_number = 2       # worker数量
+    default_max_episode = 1000      # 最大训练episode
+    default_max_slot = 3000         # 最大时隙
+    default_batch_size = 256        # 批大小
+    default_learn_rate = 0.0005     # 学习率
+    default_gamma = 0.75                # 折扣系数
+    default_epsilon_decay = 0.99995     # 探索率衰减
+    default_detail_log = False
 
     # 持久化参数
     default_train = True
@@ -58,20 +60,6 @@ class Global:
 
     # 数据分析模式，开启此状态将读取训练/测试数据进行数据分析，绘图等工作
     default_analysis = False
-
-    # init方法只用来检测是否正确的初始化了，可能后续有一些参数需要进行验证?
-    @staticmethod
-    def init():
-        Global.check()
-
-    @staticmethod
-    def check():
-        assert Global.map_style == 'h' or Global.map_style == 'g'
-        assert type(Global.cell_limit) is int
-        assert type(Global.worker_number) is int
-        assert type(Global.max_slot) is int
-        assert type(Global.max_episode) is int
-        assert type(Global.batch_size) is int
 
     @staticmethod
     def energy_reward_calculate(x):

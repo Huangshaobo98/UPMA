@@ -8,22 +8,22 @@ import pandas as pd
 
 
 class Persistent:
-    __persistent_directory = g.default_save_path
-    __train = g.default_train
-    __continue_train = g.default_continue_train
-    __model_directory = g.default_save_path + "/model"
-    __data_directory = g.default_save_path + ("/train" if g.default_train else "/test")
-    __model_path = __model_directory + "/model.h5"
-    __data_path = __data_directory + "/running.csv"
-    __episode_data_path = __data_directory + "/episode.csv"
+    __persistent_directory = None
+    __train = None
+    __continue_train = None
+    __model_directory = None
+    __data_directory = None
+    __model_path = None
+    __data_path = None
+    __episode_data_path = None
 
-    __network_model_directory = __data_path + "/network_model"
-    __network_model_path = __network_model_directory + ".npz"
+    __network_model_directory = None
+    __network_model_path = None
 
     __file_handle = None  # 文件句柄，用于记录运行时状态
     __file_writer = None  # csv_writer
-    __added_header = g.default_continue_train  # 续训时应该已经创建好了header
-    __episode_added_header = g.default_continue_train
+    __added_header = None  # 续训时应该已经创建好了header
+    __episode_added_header = None
 
     @staticmethod
     def init(analysis: bool,
@@ -125,15 +125,12 @@ class Persistent:
 
     @staticmethod
     def save_network_model(cell_length, cell_limit, sensor_position):
-        np.savez(Persistent.__network_model_directory,
-                cell_length=np.array(cell_length),
-                cell_limit=np.array(cell_limit),
-                sensor_position=sensor_position)
+        np.savez(Persistent.__network_model_directory, sensor_position=sensor_position)
 
     @staticmethod
     def load_network_model():
-        npfile = np.load(Persistent.__network_model_path)
-        return npfile['cell_length'][0], npfile['cell_limit'][0], npfile['sensor_position']
+        file = np.load(Persistent.__network_model_path)
+        return file['sensor_position']
 
     @staticmethod
     def model_path() -> str:

@@ -1,31 +1,39 @@
-# 无人机联合众包节点作aoi优化
-## 目前进度
-1. 网络模型（完成）
-2. dqn模型适配（完成）
-3. 能量模型适配（完成）
-4. bug fix（部分完成） 
-5. aoi模型(部分完成)
-6. 数据持久化工作(完成)
+# Age of Information (AoI) optimization by UAV joint worker nodes based on deep reinforcement learning algorithm D3QN
+## Finished progress
+1. Network model
+2. D3QN adaptation
+3. Energy model adaptation
+4. Basic bug fix
+5. AoI model adaptation (Partially completed)
+6. Data persistence
+7. Train
 
-## 待跟进
-1. 模型验证
-2. 信任模型(可能要使用以前论文的实现)
-3. worker的运动模型
-4. agent模型目前仍旧无法正确得到训练，仍旧在定位bug中
+## Next work
+1. Trust model(maybe based on past paper)
+2. Motion model of worker node
+3. Comparison with traditional strategies
 
-## 启动
+## How to run
 ```shell
-# 默认启动时进行重新训练
-./main.py 
-# 可以以追加指令的方式训练
-./main.py --train # (or --train-true) 
-# 断点续训
-./main.py --train --continue_train # (or --continue_train-true)
-# 开启测试模式
-./main.py --test # (or --train-false)
-# 训练/测试数据分析
-./main.py --analysis --train # (or -a)
-# 开启控制台日志
-./main.py --console_log # (or -c, -ct, --console_log-true) 
-# 开启文件日志
-./main.py --file_log # (or -f,-ft --file_log-true) 
+# Train by default
+python3 ./main.py 
+# Train by adding parameters
+python3 ./main.py -train
+# Continuing training
+python3 ./main.py -train -continue
+# Test on
+python3 ./main.py -test 
+# Train/test data analysis (unfinished)
+python3 ./main.py -analysis -train
+# Console log on
+python3 ./main.py -console
+# File log on (save at ./save/log by default)
+python3 ./main.py -file_log
+
+# Other parameters
+python3 ./main.py -lr 0.001 # learning rate
+python3 ./main.py -batch 256 # batch size
+python3 ./main.py -gamma 0.75 # reward discount rate
+python3 ./main.py -decay 0.99995 # epsilon decay
+python3 ./main.py -sensor 1000 # sensor number
+python3 ./main.py -worker 2 # worker number

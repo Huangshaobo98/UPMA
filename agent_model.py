@@ -21,10 +21,10 @@ from math import floor
 
 
 class State:
-    cell_size = g.cell_limit
+    cell_size = 0
     max_energy = g.uav_energy
     onehot_position = g.onehot_position
-    sensor_number = g.sensor_number
+    sensor_number = 0
     second_per_slot = g.sec_per_slot
 
     def __init__(self,
@@ -42,6 +42,11 @@ class State:
         self.__energy = energy
         self.__charge = charge
 
+    @staticmethod
+    def init(sensor_number, cell_size):
+        State.sensor_number = sensor_number
+        State.cell_size = cell_size
+
     @property
     def real_aoi(self) -> np.ndarray:
         return self.__real_aoi
@@ -51,12 +56,20 @@ class State:
         return self.real_aoi / State.sensor_number #/ State.second_per_slot  #
 
     @property
+    def average_real_aoi_state(self) -> float:
+        return np.average(self.real_aoi_state)
+
+    @property
     def observation_aoi(self) -> np.ndarray:
         return self.__observation_aoi
 
     @property
     def observation_aoi_state(self) -> np.ndarray:
         return self.__observation_aoi / State.sensor_number  # / State.second_per_slot  #
+
+    @property
+    def average_observation_aoi_state(self) -> float:
+        return np.average(self.observation_aoi_state)
 
     @property
     def energy(self) -> float:
@@ -106,7 +119,7 @@ class State:
 
 class DQNAgent:
     def __init__(self, cell_size, action_size, gamma=0.75, epsilon=1, epsilon_decay=0.99995,
-                 epsilon_min=0.075, lr=0.0005, dueling=True, train=True, continue_train=False, model_path=""):
+                 epsilon_min=0.05, lr=0.0005, dueling=True, train=True, continue_train=False, model_path=""):
         # 暂且设定的动作集合：'h': 六个方向的单元移动+一种什么都不做的悬浮，在特定小区的悬浮可以看做是进行了充电操作
         self.cell_size = cell_size
         self.action_size = action_size

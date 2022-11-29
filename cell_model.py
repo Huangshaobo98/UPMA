@@ -86,37 +86,34 @@ class Cell:
             ret += sensor.get_real_aoi(current_slot)
         return ret
 
+    @staticmethod
+    def uniform_generator(cell_limit, cell_length, sensor_number, seed=10):
+        random.seed(seed)
+        ret_cell = []
+        map_style = g.map_style
+        for x in range(cell_limit):
+            ret_cell.append([Cell(x, y) for y in range(cell_limit)])
+        sensor_cell_x = [random.randint(0, cell_limit - 1) for _ in range(sensor_number)]
+        sensor_cell_y = [random.randint(0, cell_limit - 1) for _ in range(sensor_number)]
 
-def uniform_generator(seed=10):
-    random.seed(seed)
-    ret_cell = []
-    cell_limit = g.cell_limit
-    cell_length = g.cell_length
-    sensor_number = g.sensor_number
-    map_style = g.map_style
-    for x in range(cell_limit):
-        ret_cell.append([Cell(x, y) for y in range(cell_limit)])
-    sensor_cell_x = [random.randint(0, cell_limit - 1) for _ in range(sensor_number)]
-    sensor_cell_y = [random.randint(0, cell_limit - 1) for _ in range(sensor_number)]
+        r3 = sqrt(3)
+        if map_style == 'g':
+            sensor_x_diff = [random.uniform(0, cell_length) for _ in range(sensor_number)]
+            sensor_y_diff = [random.uniform(0, cell_length) for _ in range(sensor_number)]
+        elif map_style == 'h':
+            sensor_x_diff = [random.uniform(-cell_length, cell_length) for _ in range(sensor_number)]
+            sensor_y_diff = [random.uniform(-cell_length * r3 / 2, cell_length * r3 / 2) if abs(x) < cell_length / 2
+                             else random.uniform(abs(x) * r3 - r3 * cell_length, - abs(x) * r3 + r3 * cell_length)
+                             for x in sensor_x_diff]
+        else:
+            assert False
 
-    r3 = sqrt(3)
-    if map_style == 'g':
-        sensor_x_diff = [random.uniform(0, cell_length) for _ in range(sensor_number)]
-        sensor_y_diff = [random.uniform(0, cell_length) for _ in range(sensor_number)]
-    elif map_style == 'h':
-        sensor_x_diff = [random.uniform(-cell_length, cell_length) for _ in range(sensor_number)]
-        sensor_y_diff = [random.uniform(-cell_length * r3 / 2, cell_length * r3 / 2) if abs(x) < cell_length / 2
-                         else random.uniform(abs(x) * r3 - r3 * cell_length, - abs(x) * r3 + r3 * cell_length)
-                         for x in sensor_x_diff]
-    else:
-        assert False
-
-    for i in range(sensor_number):
-        cell_location_x, cell_location_y = ret_cell[sensor_cell_x[i]][sensor_cell_y[i]].position
-        sen = Sensor(sensor_x_diff[i] + cell_location_x, sensor_y_diff[i] + cell_location_y,
-                     sensor_cell_x[i], sensor_cell_y[i])
-        ret_cell[sensor_cell_x[i]][sensor_cell_y[i]].add_sensor(sen)
-    return ret_cell
+        for i in range(sensor_number):
+            cell_location_x, cell_location_y = ret_cell[sensor_cell_x[i]][sensor_cell_y[i]].position
+            sen = Sensor(sensor_x_diff[i] + cell_location_x, sensor_y_diff[i] + cell_location_y,
+                         sensor_cell_x[i], sensor_cell_y[i])
+            ret_cell[sensor_cell_x[i]][sensor_cell_y[i]].add_sensor(sen)
+        return ret_cell
 
 # def NormalGenerator(xsize, ysize, cellsize=10, sensornum=500, seed = 10):
 #     # 待修改

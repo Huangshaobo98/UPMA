@@ -40,6 +40,11 @@ class MobilePolicy:
 
 
 class WorkerBase:
+    cell_limit = g.default_cell_limit
+
+    @staticmethod
+    def set_cell_limit(cell_limit: int):
+        WorkerBase.cell_limit = cell_limit
 
     def __init__(self, x_start: int, y_start: int, initial_trust: float, out_able: bool, fix_start: bool):
         self._x_start = x_start
@@ -57,11 +62,11 @@ class WorkerBase:
             return self._x, self._y
 
         if not self._out_able:          # 不可移出边界时，只能卡在边界处
-            self._x = min(g.cell_limit - 1, max(0, self._x + dx))
-            self._y = min(g.cell_limit - 1, max(0, self._y + dy))
+            self._x = min(WorkerBase.cell_limit - 1, max(0, self._x + dx))
+            self._y = min(WorkerBase.cell_limit - 1, max(0, self._y + dy))
         else:
-            self._x = (self._x + dx) % g.cell_limit
-            self._y = (self._y + dy) % g.cell_limit
+            self._x = (self._x + dx) % WorkerBase.cell_limit
+            self._y = (self._y + dy) % WorkerBase.cell_limit
         return self._x, self._y
 
     @property
@@ -77,8 +82,8 @@ class WorkerBase:
             self._x = self._x_start
             self._y = self._y_start
         else:
-            self._x = randint(0,  g.cell_limit - 1)
-            self._y = randint(0,  g.cell_limit - 1)
+            self._x = randint(0,  WorkerBase.cell_limit - 1)
+            self._y = randint(0,  WorkerBase.cell_limit - 1)
         self._trust = self._initial_trust
 
 
