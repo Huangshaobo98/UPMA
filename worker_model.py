@@ -131,7 +131,7 @@ class Worker(WorkerBase):
         if rand() > self._work_rate:  # 假设工作率是80%，表明在本slot内，80%会执行采集任务
             return False
         sensors = cell.get_sensors()
-        selected_sensors = sample(sensors, randint(1, len(sensors)))
+        selected_sensors = sample(sensors, randint(0, len(sensors)))
         sensor_index = [sensor.index for sensor in selected_sensors]
         Logger.log("Worker {} sampled at cell {}, sampled number: {}, sampled sensor list: {}"
                    .format(self.index, cell.index, len(sensor_index), sensor_index))

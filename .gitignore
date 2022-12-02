@@ -3,3 +3,7 @@ venv/
 __pycache__/
 save/
 nohup.out
+data/t-drive/
+data/t-drive.zip
+*.jpg
+*.npy

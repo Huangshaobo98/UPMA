@@ -65,3 +65,6 @@ class Global:
     def energy_reward_calculate(x):
         return - 2 * exp(Global.energy_reward_coefficient * x) \
                                         / (1 + exp(Global.energy_reward_coefficient * x))
+
+    @staticmethod
+    def

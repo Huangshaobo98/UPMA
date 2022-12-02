@@ -1,0 +1,8 @@
+{
+  "name": "t-drive.zip",
+  "data_directory": "/release/taxi_log_2008_by_id",
+  "note_url": "https://www.microsoft.com/en-us/research/publication/t-drive-trajectory-data-sample/",
+  "number": 10357,
+  "prefix": "",
+  "suffix": ".txt"
+}
