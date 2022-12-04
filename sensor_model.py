@@ -1,6 +1,7 @@
 from aoi_model import AoI
 from worker_model import Worker
 from collections import defaultdict
+# from cell_model import Cell
 
 
 class Sensor:
@@ -8,19 +9,26 @@ class Sensor:
     __location_y = []
     __num_index = 0
 
-    def __init__(self, x_location: float, y_location: float, cell_x: int, cell_y: int):
-        self.__id = Sensor.__num_index
-        Sensor.__num_index += 1
-        self.__x = x_location
-        self.__y = y_location
+    def __init__(self, index, x_diff: float, y_diff: float, cell):
+        self.__id = index
+
+        [cell_x_position, cell_y_position] = cell.position
+        self.__x_position = x_diff + cell_x_position
+        self.__y_position = y_diff + cell_y_position
+
+        Sensor.__location_x.append(self.__x_position)
+        Sensor.__location_y.append(self.__y_position)
+
+        [cell_x, cell_y] = cell.index
         self.__cell_x = cell_x
         self.__cell_y = cell_y
-        Sensor.__location_x.append(self.__x)
-        Sensor.__location_y.append(self.__y)
+
         self.__worker_report_list = []
         self.__aoi = AoI()
         self.__worker_success_dict = defaultdict(int)
         self.__worker_fail_dict = defaultdict(int)
+
+        cell.add_sensor(self)
 
     def __hash__(self):
         return id(self)
@@ -38,11 +46,13 @@ class Sensor:
     def get_real_aoi(self, cur_slot):
         return self.__aoi.get_real_aoi(cur_slot)
 
-    def get_cell_index(self):
-        return self.__cell_x, self.__cell_x
+    @property
+    def cell_index(self):
+        return [self.__cell_x, self.__cell_x]
 
-    def get_position(self):
-        return self.__x, self.__y
+    @property
+    def position(self):
+        return [self.__x_position, self.__y_position]
 
     def report_by_uav(self, current_slot):
         self.__aoi.report_by_uav(current_slot)      # 对uav访问节点的aoi刷新

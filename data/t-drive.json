@@ -1,1 +1,19 @@
-{"side_length": 0.024309485018510043, "length_span_cell": 4682.1804542533355, "second_per_slot": 234.10902271266679, "x_range": [116.185, 116.585], "y_range": [39.75, 40.07817804774989], "x_limit": 10, "y_limit": 10, "min_second": 221444, "max_second": 754759, "slot_number": 2278}
+{
+  "side_length": 0.014507775995021215,
+  "length_span_cell": 2794.301283916604,
+  "second_per_slot": 186.28675226110693,
+  "x_range": [
+    116.15,
+    116.64
+  ],
+  "y_range": [
+    39.72,
+    40.133471615858106
+  ],
+  "x_limit": 20,
+  "y_limit": 20,
+  "uav_speed": 15,
+  "min_second": 221444,
+  "max_second": 754759,
+  "slot_number": 2862
+}

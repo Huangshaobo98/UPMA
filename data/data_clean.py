@@ -6,20 +6,21 @@ from zipfile import ZipFile
 import numpy as np
 from threading import Lock, Thread
 import matplotlib.pyplot as plt
-cwd = os.getcwd()
-data_set_json_path = cwd + '/data_set.json'
 
 
 class DataCleaner:
     earth_radian_coefficient = pi * 6371393 / 180
 
     def __init__(self,
-                 read_thread=7,
-                 x_limit=10,
-                 y_limit=10,
-                 x_range=[116.185, 116.585],
-                 y_range=[39.75, 40.095],
-                 uav_speed=20):
+                 read_thread=8,
+                 x_limit=20,
+                 y_limit=20,
+                 x_range=[116.15, 116.64],
+                 y_range=[39.72, 40.095],
+                 uav_speed=15):
+
+        current_work_path = os.path.split(os.path.realpath(__file__))[0]
+        data_set_json_path = current_work_path + '/data_set.json'
 
         with open(data_set_json_path, 'r') as file:
             json_file = json.load(file)
@@ -33,15 +34,17 @@ class DataCleaner:
         self.__file_number = json_file['number']
         self.__prefix = json_file['prefix']
         self.__suffix = json_file['suffix']
-        self.__pack_path = cwd + '/' + json_file['name']
+        self.__pack_path = current_work_path + '/' + json_file['name']
         self.__unpack_directory = self.__pack_path[:self.__pack_path.find('.')] + '/'
         self.__data_directory = self.__unpack_directory + json_file['data_directory'] + '/'
-        self.__coordinate_directory = cwd + "/coordinate"
+        self.__coordinate_directory = current_work_path + "/coordinate"
         self.__coordinate_path = self.__coordinate_directory + '.npy'
-        self.__info_json_path = cwd + '/' + json_file['name'][:json_file['name'].find('.')] + '.json'
-        self.__worker_position_directory = cwd + '/worker'
+
+        self.__info_json_path = current_work_path + '/' + json_file['name'][:json_file['name'].find('.')] + '.json'
+        self.__worker_position_directory = current_work_path + '/worker'
         self.__worker_position_path = self.__worker_position_directory + '.npy'
-        self.__cell_coordinate_directory = cwd + '/cell_coordinate'
+
+        self.__cell_coordinate_directory = current_work_path + '/cell_coordinate'
         self.__cell_coordinate_path = self.__cell_coordinate_directory + '.npy'
 
         self.__coordinate = np.empty(shape=(0, 2))
@@ -58,11 +61,10 @@ class DataCleaner:
         # self.__io_worker = ThreadPoolExecutor(max_workers=self.__thread_number)
         self.check_unpack()
         self.__info_json = self.read_info_json()
-        # self.coordinate_npy()  # 读取已经存储好的worker轨迹节点，如没有，启动多线程从txt文件中读取
         self.__coordinate = self.read_coordinate()
         self.__cell_coordinate = self.read_cell_coordinate()
-        # self.__worker_position = self.read_worker_position()       # 读取已经存储好的info_json，如果没有，则创建，并导入信息
-        self.plot_scatters()
+        self.__worker_position = self.read_worker_position()       # 读取已经存储好的info_json，如果没有，则创建，并导入信息
+        # self.plot_scatters()
 
     def check_unpack(self):
         if not os.path.exists(self.__unpack_directory):
@@ -83,10 +85,9 @@ class DataCleaner:
             return np.load(self.__worker_position_path, allow_pickle=True)
         info_json = self.read_info_json()
         tasks = [Thread(target=self.task_read_worker_position, args=(i, info_json))
-                 for i in range(1, self.__thread_number)]
+                 for i in range(self.__thread_number)]
         for task in tasks:
             task.start()
-        self.task_read_worker_position(0, info_json)
         for task in tasks:
             task.join()
         np.save(self.__worker_position_directory, self.__worker_position)
@@ -115,8 +116,9 @@ class DataCleaner:
                 if x < x_range[0] or x > x_range[1] or y < y_range[0] or y > y_range[1]:
                     continue
                 slot = temp_slot
-                cell_x, cell_ty = self.nearest_cell(x, y)
-                positions.append(position_info)
+                cell_x, cell_y = self.nearest_cell(x, y)
+                position_info[slot] = [cell_x, cell_y]
+
                 # [bias_x, bias_y] = [x - x_range[0], y - y_range[0]]
                 # remain_y = bias_y % (1.5 * side_length)
                 # if 0.5 * side_length < remain_y < 1 * side_length:
@@ -159,8 +161,9 @@ class DataCleaner:
                 #         cell_y = quot_y + 1
                 #         cell_x = int((bias_x / (sqrt(3) * side_length) - 1 / 2))
                 # position_info[slot] = [cell_x, cell_y]
-
-            # print("work {} over, total {}, id {}".format(i, self.__total_number, ind))
+            positions.append(position_info)
+            self.__total_number += 1
+            print("work {} over, total {}, id {}".format(i, self.__total_number, ind))
         self.__lock.acquire()
         for i in range(ind * self.__read_number + 1, min((ind + 1) * self.__read_number, self.__file_number + 1)):
             self.__worker_position[i - 1] = positions[i - (ind * self.__read_number + 1)]
@@ -175,8 +178,11 @@ class DataCleaner:
             for j in range(self.__y_limit):
               x.append(self.__cell_coordinate[i,j][0])
               y.append(self.__cell_coordinate[i,j][1])
+
+        plt.figure(figsize=(10, 8), dpi=450)
+
+        plt.scatter(self.__coordinate[:, 0], self.__coordinate[:, 1], c='gray', s=0.1)
         plt.scatter(x, y)
-        plt.scatter(self.__coordinate[:, 0], self.__coordinate[:, 1], c='gray', s=1)
         x_range = self.__info_json['x_range']
         y_range = self.__info_json['y_range']
         plt.xlim(x_range[0], x_range[1])
@@ -187,6 +193,9 @@ class DataCleaner:
     def nearest_cell(self, pos_x, pos_y):
         dis = inf
         idx = [-1, -1]
+
+        # x_about = int((pos_x - self.__x_range[0]) / (self.side_length * sqrt(3)))
+        # y_about = int((pos_y - self.__y_range[0]) / (self.side_length * 1.5))
         for i in range(self.__x_limit):
             for j in range(self.__y_limit):
                 temp = sqrt((pos_x - self.__cell_coordinate[i, j][0]) ** 2 + (pos_y - self.__cell_coordinate[i, j][1]) ** 2)
@@ -197,7 +206,7 @@ class DataCleaner:
 
     def read_cell_coordinate(self):
         if os.path.exists(self.__cell_coordinate_path):
-            return np.load(self.__cell_coordinate_path)
+            return np.load(self.__cell_coordinate_path, allow_pickle=True)
         side_length = self.__info_json['side_length']
         x_span = side_length * sqrt(3)
         y_span = side_length * 3 / 2
@@ -207,7 +216,7 @@ class DataCleaner:
                 self.__cell_coordinate[i, j] = np.array([self.__x_range[0] + j * x_span + dis,
                                                          self.__y_range[0] + i * y_span])
 
-        np.save(self.__coordinate_directory, self.__cell_coordinate)
+        np.save(self.__cell_coordinate_directory, self.__cell_coordinate)
         return self.__cell_coordinate
 
     # 读取已经处理好的json信息
@@ -215,7 +224,16 @@ class DataCleaner:
         if os.path.exists(self.__info_json_path):
             with open(self.__info_json_path, 'r') as file:
                 info_json = json.load(file)
-            return info_json
+            if info_json['uav_speed'] != self.__uav_speed or info_json['x_limit'] != self.__x_limit \
+                    or info_json['y_limit'] != self.__y_limit:
+                if os.path.exists(self.__info_json_path):
+                    os.remove(self.__info_json_path)
+                if os.path.exists(self.__cell_coordinate_path):
+                    os.remove(self.__cell_coordinate_path)
+                if os.path.exists(self.__worker_position_path):
+                    os.remove(self.__worker_position_path)
+            else:
+                return info_json
         # 缺失json文件，需要对数据进行预处理
         assert self.__x_limit > 1 and self.__y_limit > 1
         side_length = (self.__x_range[1] - self.__x_range[0]) / (self.__x_limit - 0.5) / sqrt(3)
@@ -231,14 +249,14 @@ class DataCleaner:
             'x_range': self.__x_range,
             'y_range': [self.__y_range[0], self.__y_range[0] + (self.__y_limit - 1) * y_span],
             'x_limit': self.__x_limit,
-            'y_limit': self.__y_limit
+            'y_limit': self.__y_limit,
+            'uav_speed': self.__uav_speed
         }
 
         # 处理时间信息，寻找车辆记录的起始时间和结束时间
-        tasks = [Thread(target=self.task_time_analyze, args=(i,)) for i in range(1, self.__thread_number)]
+        tasks = [Thread(target=self.task_time_analyze, args=(i,)) for i in range(self.__thread_number)]
         for task in tasks:
             task.start()
-        self.task_time_analyze(0)
         for task in tasks:
             task.join()
 
@@ -248,15 +266,12 @@ class DataCleaner:
                                        / second_per_slot)
 
         with open(self.__info_json_path, "w") as f:
-            json.dump(info_json, f)
+            json.dump(info_json, f, indent=2)
 
         return info_json
 
     # 根据x数量，计算单个小区边长等信息
     def data_clean(self, x_range, y_range, x_number, y_number, uav_speed):
-        pass
-
-    def plot_network(self, base_):
         pass
 
     def task_read_coordinate(self, ind):
@@ -271,16 +286,15 @@ class DataCleaner:
                     y.append(float(temp[-1]))
 
         self.__lock.acquire()
-        self.__coordinate = np.append(self.__coordinate, np.stack([x, y]).T)
+        self.__coordinate = np.append(self.__coordinate, np.stack([x, y]).T, axis=0)
         self.__lock.release()
 
     def read_coordinate(self):
         if os.path.exists(self.__coordinate_path):
             return np.load(self.__coordinate_path, allow_pickle=True)
-        tasks = [Thread(target=self.task_read_coordinate, args=(i,)) for i in range(1, self.__thread_number)]
+        tasks = [Thread(target=self.task_read_coordinate, args=(i,)) for i in range(self.__thread_number)]
         for task in tasks:
             task.start()
-        self.task_read_coordinate(0)
         for task in tasks:
             task.join()
 
@@ -317,6 +331,61 @@ class DataCleaner:
     def file_name(self, ind):
         return self.__data_directory + self.__prefix + str(ind) + self.__suffix
 
+    @property
+    def worker_coordinate(self):
+        return self.__coordinate
 
+    @property
+    def worker_position(self):
+        return self.__worker_position
+
+    @property
+    def cell_coordinate(self):
+        return self.__cell_coordinate
+
+    @property
+    def x_limit(self):
+        return self.__x_limit
+
+    @property
+    def y_limit(self):
+        return self.__y_limit
+
+    @property
+    def cell_limit(self):
+        return [self.__x_limit, self.__y_limit]
+
+    @property
+    def side_length(self):
+        return self.__info_json['side_length']
+
+    @property
+    def second_per_slot(self):
+        return self.__info_json['second_per_slot']
+
+    @property
+    def x_range(self):
+        return self.__info_json['x_range']
+
+    @property
+    def y_range(self):
+        return self.__info_json['y_range']
+
+    @property
+    def length_span_cell(self):
+        return self.__info_json['length_span_cell']
+
+    @property
+    def slot_number(self):
+        return self.__info_json['slot_number']
+
+    @property
+    def info_json(self):
+        return self.__info_json
+
+    @property
+    def uav_speed(self):
+        return self.__info_json['uav_speed']
+    
 if __name__ == "__main__":
     cleaner = DataCleaner()

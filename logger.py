@@ -1,7 +1,6 @@
 # 感觉也并不需要logging，简单实现一个能向控制台打印当前状态的日志器就行了
 import os
 import datetime
-from global_parameter import Global as g
 
 
 class Logger:

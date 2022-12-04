@@ -2,7 +2,7 @@
 import random
 import numpy as np
 from collections import deque
-from tensorflow.python.keras.layers import Dense, Flatten, Lambda, Dropout, MaxPool2D, Input
+from tensorflow.python.keras.layers import Dense, Flatten, Lambda, Input # Dropout, MaxPool2D
 from tensorflow.python.keras.optimizer_v2.adam import Adam
 from tensorflow.python.keras.engine.training import Model
 import tensorflow.python.keras.backend as K
@@ -11,11 +11,11 @@ from global_parameter import Global as g
 
 
 class State:
-    cell_size = 0
-    max_energy = g.uav_energy
+    x_limit = -1
+    y_limit = -1
     onehot_position = g.onehot_position
     sensor_number = 0
-    second_per_slot = g.sec_per_slot
+    # second_per_slot = g.sec_per_slot
 
     def __init__(self,
                  real_aoi: np.ndarray,
@@ -35,7 +35,7 @@ class State:
     @staticmethod
     def init(sensor_number, cell_size):
         State.sensor_number = sensor_number
-        State.cell_size = cell_size
+        [State.x_limit, State.y_limit] = cell_size
 
     @property
     def real_aoi(self) -> np.ndarray:
@@ -67,7 +67,7 @@ class State:
 
     @property
     def energy_state(self) -> np.ndarray:
-        return np.array([self.energy / State.max_energy], dtype=np.float64)
+        return np.array([self.energy / g.uav_energy], dtype=np.float64)
 
     @property
     def charge(self) -> bool:
@@ -88,11 +88,11 @@ class State:
     @staticmethod
     def transform(position_state: List[int]) -> np.ndarray:
         if State.onehot_position:
-            new_pos_state = np.zeros(shape=(2, State.cell_size), dtype=np.float64)
+            new_pos_state = np.zeros(shape=(2, max(State.x_limit, State.y_limit)), dtype=np.float64)
             new_pos_state[0, position_state[0]] = 1.0
             new_pos_state[1, position_state[1]] = 1.0
         else:
-            new_pos_state = np.zeros(shape=(State.cell_size, State.cell_size), dtype=np.float64)
+            new_pos_state = np.zeros(shape=(State.x_limit, State.y_limit), dtype=np.float64)
             new_pos_state[position_state[0]][position_state[1]] = 1.0
         return new_pos_state
 
@@ -111,7 +111,7 @@ class DQNAgent:
     def __init__(self, cell_size, action_size, gamma=0.75, epsilon=1, epsilon_decay=0.99995,
                  epsilon_min=0.05, lr=0.0005, dueling=True, train=True, continue_train=False, model_path=""):
         # 暂且设定的动作集合：'h': 六个方向的单元移动+一种什么都不做的悬浮，在特定小区的悬浮可以看做是进行了充电操作
-        self.cell_size = cell_size
+        [self.x_size, self.y_size] = cell_size
         self.action_size = action_size
         self.memory = deque(maxlen=25000)  # 创建双端队列
         self.gamma = gamma  # discount rate
@@ -133,11 +133,11 @@ class DQNAgent:
 
     def _build_model(self, dueling):
         # Neural Net for Deep-Q learning Model
-        input_a = Input(shape=(self.cell_size, self.cell_size))  # 观测AoI状态
+        input_a = Input(shape=(self.x_size, self.y_size))  # 观测AoI状态
         if not self.pos_grid:
-            input_b = Input(shape=(2, self.cell_size))                    # 无人机坐标点
+            input_b = Input(shape=(2, max(self.x_size, self.y_size)))                    # 无人机坐标点
         else:
-            input_b = Input(shape=(self.cell_size, self.cell_size))
+            input_b = Input(shape=(self.x_size, self.y_size))
         input_c = Input(shape=(1,))      # 能量模型，一维数值
         input_d = Input(shape=(1,))      # 是否在充电1.0-true 0.0 false
 
@@ -161,7 +161,8 @@ class DQNAgent:
         combined = K.concatenate([x.output, y.output, z.output, q.output])
 
         # model.add(Dense(128, input_dim=self.state_size, activation='relu'))
-        o = Dense(256, activation='relu')(combined)
+        o = Dense(512, activation='relu')(combined)
+        o = Dense(256, activation='relu')(o)
         o = Dense(256, activation='relu')(o)
         o = Dense(64, activation='relu')(o)
         # o = Dense(64, activation='relu')(o)

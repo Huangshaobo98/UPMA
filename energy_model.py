@@ -1,8 +1,8 @@
 from global_parameter import Global as g
-
+from data.data_clean import DataCleaner
 
 class Energy:
-    v = g.uav_speed  # 无人机速度
+    # v = g.uav_speed  # 无人机速度
     W = 1.2  # 重量
     D = 1.29  # 空气密度
     x = 0.221  # 长度
@@ -11,13 +11,17 @@ class Energy:
     A = 0.4  # 前迎面积
     Cd = 0.040  # 空气的动力阻力系数
     charge_power = 65  # 充电电压65w
-    hover_energy_power = (W ** 2) / D / (x * y) / v
-    move_energy_power = 0.5 * Cd * A * D * (v ** 3) + hover_energy_power
-    second_span_cell = g.sec_per_slot
+    __move_energy_cost = -1
+    __hover_energy_cost = -1
+    __charge_energy_gain = -1
 
-    __move_energy_cost = move_energy_power * second_span_cell / 3600
-    __hover_energy_cost = hover_energy_power * second_span_cell / 3600
-    __charge_energy_gain = charge_power * second_span_cell / 3600
+    @staticmethod
+    def init(cleaner: DataCleaner):
+        hover_energy_power = (Energy.W ** 2) / Energy.D / (Energy.x * Energy.y) / cleaner.uav_speed
+        move_energy_power = 0.5 * Energy.Cd * Energy.A * Energy.D * (cleaner.uav_speed ** 3) + hover_energy_power
+        Energy.__move_energy_cost = move_energy_power * cleaner.second_per_slot / 3600
+        Energy.__hover_energy_cost = hover_energy_power * cleaner.second_per_slot / 3600
+        Energy.__charge_energy_gain = Energy.charge_power * cleaner.second_per_slot / 3600
 
     @staticmethod
     def hover_energy_cost():

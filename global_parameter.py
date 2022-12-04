@@ -1,5 +1,4 @@
-from math import sqrt, log, exp
-import os
+from math import log, exp
 
 # 用于存储一些非命令行调整的参数
 # 前缀加default表示默认参数，实际参数可能不与默认参数一致
@@ -7,20 +6,20 @@ import os
 
 class Global:
     # 网络模型相关
-    map_style = 'h'             # 地图类型h: 六边形 g: 栅格
-    cell_length = 600           # 小区边长 m
+    # map_style = 'h'             # 地图类型h: 六边形 g: 栅格
+    # cell_length = 600           # 小区边长 m
 
     # worker相关
-    worker_out_able = True  # 可移动离开所观测小区
+    worker_out_able = True      # 可移动离开所观测小区
     worker_initial_trust = 0.5
-    worker_activity = 0.4       # 活跃度，每轮以此概率移动
+    worker_activity = 0.4       # 活跃度，最大可收集的节点数量/小区节点总数
     initial_trust = 0.5
     worker_work_rate = 0.6      # worker在每个时隙下工作的概率
     worker_start_fix = False
 
     # 无人机相关
-    uav_speed = 15              # m/s
-    uav_energy = 20             # Wh
+    # uav_speed = 15              # m/s
+    uav_energy = 77             # Wh
     uav_start_fix = True        # 无人机初始位置是否固定
     uav_start_location = [0, 0]
     charge_everywhere = True    # 是否可以任意位置充电
@@ -35,19 +34,16 @@ class Global:
     # 充电位置
     charge_cells = [[1, 1], [4, 4], [1, 4], [4, 1]]     # 待设置的参数
 
-    # 其他参数(基于上述参数计算得到的)，在init中进行初始化
-    sec_per_slot = cell_length / uav_speed * (sqrt(3) if map_style == 'h' else 1)
-
     # 下列参数为可以通过命令行自由调整的参数
-    default_cell_limit = 6          # 边界大小
-    default_sensor_number = 500     # 传感器数量
-    default_worker_number = 2       # worker数量
-    default_max_episode = 1000      # 最大训练episode
-    default_max_slot = 3000         # 最大时隙
+    # default_cell_limit = 6          # 边界大小
+    default_sensor_number = 1000     # 传感器数量
+    default_worker_number = 10       # worker数量
+    default_max_episode = 2500      # 最大训练episode
+    # default_max_slot = 3000         # 最大时隙
     default_batch_size = 256        # 批大小
     default_learn_rate = 0.0005     # 学习率
-    default_gamma = 0.75                # 折扣系数
-    default_epsilon_decay = 0.99995     # 探索率衰减
+    default_gamma = 0.9                # 折扣系数
+    default_epsilon_decay = 0.999995     # 探索率衰减
     default_detail_log = False
 
     # 持久化参数
@@ -62,9 +58,6 @@ class Global:
     default_analysis = False
 
     @staticmethod
-    def energy_reward_calculate(x):
-        return - 2 * exp(Global.energy_reward_coefficient * x) \
+    def energy_reward_calculate(x, coefficient):
+        return - 2 * coefficient * exp(Global.energy_reward_coefficient * x) \
                                         / (1 + exp(Global.energy_reward_coefficient * x))
-
-    @staticmethod
-    def
