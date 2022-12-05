@@ -126,6 +126,8 @@ class Cell:
         sensor_y_diff = np.array([random.uniform(abs(x_diff) / sqrt(3) - side_length,
                                                  - abs(x_diff) / sqrt(3) + side_length) for x_diff in sensor_x_diff])
 
+        # print("sensors_x" + str(sensor_x[:20]) + 'sensor_y' + str(sensor_y[:20]))
+        # print("x_diff" + str(sensor_x_diff[:20]) + 'y_diff' + str(sensor_y_diff[:20]))
         for i in range(sensor_number):
             Sensor(i, sensor_x_diff[i], sensor_y_diff[i], ret_cell[sensor_x[i], sensor_y[i]])
 
@@ -190,6 +192,6 @@ if __name__ == '__main__':
     c = Cell.uniform_generator_with_position(cleaner.x_limit,
                                              cleaner.y_limit,
                                              cleaner.cell_coordinate,
-                                             1000,
+                                             5000,
                                              cleaner.side_length)
     Cell.plot_cells(c)

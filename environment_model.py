@@ -170,7 +170,7 @@ class Environment:
         # reward = - np.sum(next_real_aoi) - punish - self.__hover_punish * hover
         # hover and not charge 悬浮但不充电，指的是无意义的悬浮操作
         reward = - np.sum(next_state.real_aoi_state) \
-                 + self.__no_power_punish * g.energy_reward_calculate(next_state.energy_state[0], self.__no_power_punish) \
+                 + self.__no_power_punish * g.energy_reward_calculate(next_state.energy_state[0]) \
                  - self.__hover_punish * (hover and not charge)
 
         return reward

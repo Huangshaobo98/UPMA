@@ -1,10 +1,10 @@
-import sys
 from global_parameter import Global as g
 import os
 
 
-def command_parse():
-    command_iter = iter(sys.argv[1:])
+def command_parse(commands,
+                  kwargs: dict = {}):
+    command_iter = iter(commands)
     parameters = {
         'console_log': g.default_console_log,
         'file_log': g.default_file_log,
@@ -23,6 +23,9 @@ def command_parse():
         'epsilon_decay': g.default_epsilon_decay,     # 探索率衰减
         'detail': g.default_detail_log
     }
+    for key, value in kwargs.items():
+        parameters[key] = value
+
     set_train = False
     while True:
         try:

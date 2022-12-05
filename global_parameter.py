@@ -36,7 +36,7 @@ class Global:
 
     # 下列参数为可以通过命令行自由调整的参数
     # default_cell_limit = 6          # 边界大小
-    default_sensor_number = 1000     # 传感器数量
+    default_sensor_number = 10000     # 传感器数量
     default_worker_number = 10       # worker数量
     default_max_episode = 2500      # 最大训练episode
     # default_max_slot = 3000         # 最大时隙
@@ -52,12 +52,12 @@ class Global:
 
     # 日志配置参数
     default_file_log = False
-    default_console_log = True
+    default_console_log = False
 
     # 数据分析模式，开启此状态将读取训练/测试数据进行数据分析，绘图等工作
     default_analysis = False
 
     @staticmethod
-    def energy_reward_calculate(x, coefficient):
-        return - 2 * coefficient * exp(Global.energy_reward_coefficient * x) \
+    def energy_reward_calculate(x):
+        return - 2 * exp(Global.energy_reward_coefficient * x) \
                                         / (1 + exp(Global.energy_reward_coefficient * x))
