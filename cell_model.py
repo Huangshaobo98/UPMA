@@ -38,29 +38,25 @@ class Cell:
 
     def task_assignment(self, current_slot):
         # 任务分配
-        sensors = self.__sensors
+        # sensors = self.__sensors
         sorted_sensor = sorted(self.__sensors,
                                key=lambda sensor: sensor.get_observation_aoi(current_slot),
                                reverse=True)
-        sorted_time = [sensor.get_observation_aoi(current_slot) for sensor in sorted_sensor]
+        # sorted_time = [sensor.get_observation_aoi(current_slot) for sensor in sorted_sensor]
         sensor_cnt = len(sorted_sensor)
         if sensor_cnt == 0:
             return
 
         trust_index = np.zeros(shape=(sensor_cnt,), dtype=float)
 
-        worker = self.__workers_at_this_slot
+        # worker = self.__workers_at_this_slot
         worker_cnt = len(self.__workers_at_this_slot)
-
-
 
         sorted_workers = sorted(self.__workers_at_this_slot,
                                 key=lambda worker: worker.trust,
                                 reverse=True)
 
-        worker_trusts = [worker.trust for worker in sorted_workers]
-        if worker_cnt > 1:
-            pass
+        # worker_trusts = [worker.trust for worker in sorted_workers]
         worker_vitality = [worker.vitality for worker in sorted_workers]
 
         sensor_ptr = 0

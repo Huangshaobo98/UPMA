@@ -1,1 +1,1 @@
-nohup python3 run.py -continue > nohup.out &
+nohup python3 run.py > nohup.out &
