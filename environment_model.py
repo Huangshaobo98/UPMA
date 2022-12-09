@@ -65,9 +65,9 @@ class Environment:
         Energy.init(cleaner)
 
         # agent
-        self.__agent = DQNAgent(cleaner.cell_limit, action_size=7,
-                                gamma=gamma, epsilon_decay=epsilon_decay, lr=learn_rate,
-                                train=train, continue_train=continue_train, model_path=Persistent.model_path())
+        self.__agent = DQNAgent(cleaner.cell_limit, action_size=7, gamma=gamma, epsilon=Persistent.trained_epsilon(),
+                                epsilon_decay=epsilon_decay, lr=learn_rate, train=train, continue_train=continue_train,
+                                model_path=Persistent.model_path())
 
         # network model
         self.__cell = Cell.uniform_generator_with_position(cleaner.x_limit,
@@ -134,6 +134,15 @@ class Environment:
         [ux, uy] = self.get_position_state()   # 获取无人机的位置信息
         self.__cell[ux, uy].uav_visited(self.__current_slot + 1)  # note: 无人机需要在下个时隙才能到达目标
 
+    def reward_calculate(self, prev_state: State, next_state: State, hover: bool, charge: bool):
+        # 因为这里是训练得到的reward，因此用real_aoi进行计算
+        # 这里虽然无人机可能会花费几个slot来换电池，但是我们对于模型的预测仍然采用下一个时隙的结果进行预测
+        reward = - np.sum(next_state.real_aoi_state) \
+                 + self.__no_power_punish * g.energy_reward_calculate(next_state.energy_state[0]) \
+                 - self.__hover_punish * (hover and not charge)
+
+        return reward
+
     def uav_step(self):
         # uav步进
         Logger.log("\r\n" + "-" * 36 + " UAV step. " + "-" * 36)
@@ -161,34 +170,37 @@ class Environment:
 
         return prev_state, uav_action_index, action_values, next_state
 
-    def reward_calculate(self, prev_state: State, next_state: State, hover: bool, charge: bool):
-        # reward 模型，可能后续有更改
-        # punish = self.__punish if next_energy <= 0 else 0
-        # 因为这里是训练得到的reward，因此用real_aoi进行计算
-        # 这里虽然无人机可能会花费几个slot来换电池，但是我们对于模型的预测仍然采用下一个时隙的结果进行预测
-        # To do: 惩罚因子仍旧有些问题，尝试一些方法解决权重相关的问题
-        # reward = - np.sum(next_real_aoi) - punish - self.__hover_punish * hover
-        # hover and not charge 悬浮但不充电，指的是无意义的悬浮操作
-        reward = - np.sum(next_state.real_aoi_state) \
-                 + self.__no_power_punish * g.energy_reward_calculate(next_state.energy_state[0]) \
-                 - self.__hover_punish * (hover and not charge)
-
-        return reward
+    def cell_step(self, cell_pos_to_refresh: set):
+        for x, y in cell_pos_to_refresh:
+            self.__cell[x, y].task_assignment(self.__current_slot)    # 任务分配
+            self.__cell[x, y].worker_visited(self.__current_slot)     # 任务执行
 
     def workers_step(self):
-        Logger.log("\r\n" + "-" * 34 + " Workers step. " + "-" * 34)
+        # 确定小区内存在那些车辆，并交由这些小区自行处理(进行任务分配和执行)
         cell_pos_to_refresh = set()
         for worker in self.__worker:
             next_position = worker.move(self.__current_slot)
             if next_position is None:
                 continue
             [x, y] = next_position
-            if worker.work(self.__cell[x, y]):
-                cell_pos_to_refresh.add((x, y))
-        if len(cell_pos_to_refresh) == 0:
-            Logger.log("No workers are working.")
-        for tup in cell_pos_to_refresh:
-            self.__cell[tup[0], tup[1]].worker_visited(self.__current_slot)
+            self.__cell[x, y].add_worker(worker)
+            cell_pos_to_refresh.add((x, y))
+
+        return cell_pos_to_refresh
+
+        # Logger.log("\r\n" + "-" * 34 + " Workers step. " + "-" * 34)
+        # cell_pos_to_refresh = set()
+        # for worker in self.__worker:
+        #     next_position = worker.move(self.__current_slot)
+        #     if next_position is None:
+        #         continue
+        #     [x, y] = next_position
+        #     if worker.work(self.__cell[x, y]):
+        #         cell_pos_to_refresh.add((x, y))
+        # if len(cell_pos_to_refresh) == 0:
+        #     Logger.log("No workers are working.")
+        # for tup in cell_pos_to_refresh:
+        #     self.__cell[tup[0], tup[1]].worker_visited(self.__current_slot)
 
     def worker_trust_refresh(self):
         for work in self.__worker:
@@ -245,7 +257,9 @@ class Environment:
 
     def slot_step(self):
         # 整合test和train的slot步进方法
-        self.workers_step()  # worker先行移动
+        refresh_cells = self.workers_step()  # worker先行移动
+        self.cell_step(refresh_cells)        # 小区进行任务分配和执行
+
         done = False
 
         # prev_observation_aoi, next_observation_aoi, prev_real_aoi, next_real_aoi, \
@@ -301,13 +315,13 @@ class Environment:
 
         return done
 
-    def clear(self):
+    def episode_clear(self):
         # 刷新状态，重新开始
-        for row in self.__cell:
-            for item in row:
-                item.clear()
+        for row_cells in self.__cell:
+            for cell in row_cells:
+                cell.episode_clear()
         for work in self.__worker:
-            work.clear()
+            work.episode_clear()
         self.__uav.clear()
         self.__episode_real_aoi.clear()
         self.__episode_observation_aoi.clear()
@@ -334,11 +348,11 @@ class Environment:
             'slot number': self.__current_slot
         }
         Persistent.save_episode_data(episode_data)
-        self.clear()
+        self.episode_clear()
         self.__agent.save(Persistent.model_path())
 
     def start(self):
         np.set_printoptions(suppress=True, precision=3)
-        for episode in range(1, self.__max_episode + 1):
+        for episode in range(Persistent.trained_episode() + 1, self.__max_episode + 1):
             self.__episode = episode
             self.episode_step()

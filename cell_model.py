@@ -16,6 +16,8 @@ class Cell:
         self.__sensors = []
         self.__length = side_length
 
+        self.__workers_at_this_slot = []
+
         # self.__map_style = g.map_style
 
         # self.__x_location = 1.5 * (self.__x - self.__y) * self.__length
@@ -31,29 +33,65 @@ class Cell:
     def index(self):
         return [self.__x, self.__y]
 
-    def clear(self):
+    def add_worker(self, worker):
+        self.__workers_at_this_slot.append(worker)
+
+    def task_assignment(self, current_slot):
+        # 任务分配
+        sensors = self.__sensors
+        sorted_sensor = sorted(self.__sensors,
+                               key=lambda sensor: sensor.get_observation_aoi(current_slot),
+                               reverse=True)
+        sorted_time = [sensor.get_observation_aoi(current_slot) for sensor in sorted_sensor]
+        sensor_cnt = len(sorted_sensor)
+        if sensor_cnt == 0:
+            return
+
+        trust_index = np.zeros(shape=(sensor_cnt,), dtype=float)
+
+        worker = self.__workers_at_this_slot
+        worker_cnt = len(self.__workers_at_this_slot)
+
+
+
+        sorted_workers = sorted(self.__workers_at_this_slot,
+                                key=lambda worker: worker.trust,
+                                reverse=True)
+
+        worker_trusts = [worker.trust for worker in sorted_workers]
+        if worker_cnt > 1:
+            pass
+        worker_vitality = [worker.vitality for worker in sorted_workers]
+
+        sensor_ptr = 0
+        satisfied_cnt = 0
+        worker_ptr = 0
+        while satisfied_cnt < sensor_cnt and worker_ptr < worker_cnt:
+            if worker_vitality[worker_ptr] == 0:
+                worker_ptr += 1
+                continue
+            if trust_index[sensor_ptr] > 1.0:
+                sensor_ptr = (sensor_ptr + 1) % sensor_cnt
+                continue
+            sorted_sensor[sensor_ptr].add_worker(sorted_workers[worker_ptr])
+            worker_vitality[worker_ptr] -= 1
+            trust_index[sensor_ptr] += sorted_workers[worker_ptr].trust
+            if trust_index[sensor_ptr] >= 1.0:
+                satisfied_cnt += 1
+            sensor_ptr = (sensor_ptr + 1) % sensor_cnt
+
+        self.__workers_at_this_slot.clear()
+
+    def episode_clear(self):
         for sensor in self.__sensors:
-            sensor.clear()
+            sensor.episode_clear()
 
     def add_sensor(self, sensor):
         self.__sensors.append(sensor)
 
-    def set_index(self, x, y):
-        self.__x = x
-        self.__y = y
-
     @property
     def position(self):
         return [self.__x_location, self.__y_location]
-
-    def get_sensor_positions(self):
-        x = []
-        y = []
-        for item in self.__sensors:
-            [xt, yt] = item.getPosition()
-            x.append(xt)
-            y.append(yt)
-        return x, y
 
     @property
     def sensors(self):
@@ -133,58 +171,6 @@ class Cell:
 
         return ret_cell
 
-    # @staticmethod
-    # def uniform_generator(cell_limit, cell_length, sensor_number, seed=10):
-    #     random.seed(seed)
-    #     ret_cell = []
-    #     map_style = g.map_style
-    #     for x in range(cell_limit):
-    #         ret_cell.append([Cell(x, y) for y in range(cell_limit)])
-    #     sensor_cell_x = [random.randint(0, cell_limit - 1) for _ in range(sensor_number)]
-    #     sensor_cell_y = [random.randint(0, cell_limit - 1) for _ in range(sensor_number)]
-    #
-    #     r3 = sqrt(3)
-    #     if map_style == 'g':
-    #         sensor_x_diff = [random.uniform(0, cell_length) for _ in range(sensor_number)]
-    #         sensor_y_diff = [random.uniform(0, cell_length) for _ in range(sensor_number)]
-    #     elif map_style == 'h':
-    #         sensor_x_diff = [random.uniform(-cell_length, cell_length) for _ in range(sensor_number)]
-    #         sensor_y_diff = [random.uniform(-cell_length * r3 / 2, cell_length * r3 / 2) if abs(x) < cell_length / 2
-    #                          else random.uniform(abs(x) * r3 - r3 * cell_length, - abs(x) * r3 + r3 * cell_length)
-    #                          for x in sensor_x_diff]
-    #     else:
-    #         assert False
-    #
-    #     for i in range(sensor_number):
-    #         cell_location_x, cell_location_y = ret_cell[sensor_cell_x[i]][sensor_cell_y[i]].position
-    #         sen = Sensor(sensor_x_diff[i] + cell_location_x, sensor_y_diff[i] + cell_location_y,
-    #                      sensor_cell_x[i], sensor_cell_y[i])
-    #         ret_cell[sensor_cell_x[i]][sensor_cell_y[i]].add_sensor(sen)
-    #     return ret_cell
-
-# def NormalGenerator(xsize, ysize, cellsize=10, sensornum=500, seed = 10):
-#     # 待修改
-#     random.seed(seed)
-#     retCell = []
-#     for x in range(xsize):
-#         retCell.append([Cell(x, y, cellsize) for y in range(ysize)])
-#     c1 = [xsize * cellsize / 3, ysize * cellsize * 2 / 3]
-#     c2 = [xsize * cellsize * 2 / 3, ysize * cellsize / 3]
-#
-#     senx = [random.normalvariate(0, 1) * cellsize for _ in range(sensornum)]
-#     seny = [random.normalvariate(0, 1) * cellsize for _ in range(sensornum)]
-#
-#     for i in range(floor(sensornum / 2) ):
-#         sen = Sensor(senx[i] + c1[0], seny[i] + c1[1], cellsize)
-#         [cx, cy] = sen.getCellIndex()
-#         retCell[cx][cy].addSensor(sen)
-#
-#     for i in range(floor(sensornum / 2) + 1, sensornum):
-#         sen = Sensor(senx[i] + c2[0], seny[i] + c2[1], cellsize)
-#         [cx, cy] = sen.getCellIndex()
-#         retCell[cx][cy].addSensor(sen)
-#
-#     return retCell
 
 
 if __name__ == '__main__':

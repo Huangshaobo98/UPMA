@@ -99,19 +99,19 @@ class Worker(WorkerBase):
                  positions: dict,
                  worker_initial_trust: float = g.initial_trust,
                  # out_able: bool,
-                 work_rate: float = g.worker_work_rate,
-                 activate: float = g.worker_activity,
+                 # work_rate: float = g.worker_work_rate,
+                 vitality: int = g.worker_vitality,
                  ):
         super(Worker, self).__init__(worker_initial_trust)
         self._id = index
         self._work_position = positions
-        self._work_rate = work_rate
+        # self._work_rate = work_rate
         self._honest = 1    # ?
-        self._activity = activate
+        self._vitality = vitality   # 活性，指的是每个时隙最多采集多少个传感器节点
         self._success_cnt = 0
         self._fail_cnt = 0
 
-    def clear(self):
+    def episode_clear(self):
         super(Worker, self).clear()
         self._success_cnt = 0
         self._fail_cnt = 0
@@ -122,6 +122,10 @@ class Worker(WorkerBase):
     #     return MobilePolicy.random_choice(g.map_style)
 
     @property
+    def vitality(self):
+        return self._vitality
+
+    @property
     def index(self):
         return self._id
 
@@ -130,23 +134,25 @@ class Worker(WorkerBase):
         return self._honest
 
     def move(self, current_slot):
+        if self._work_position is None:
+            return None
         return self._work_position[current_slot] if current_slot in self._work_position else None
 
-    def work(self, cell):
-        # work进行移动和工作，随机采集一些节点内的数据，采集后进行上报。当然其采集的性能是依赖于自身honest属性。
-        if rand() > self._work_rate:  # 假设工作率是80%，表明在本slot内，80%会执行采集任务
-            return False
-        selected_sensors = sample(cell.sensors, randint(0, int(cell.sensor_number * self._activity)))
-
-        sensor_index = [sensor.index for sensor in selected_sensors]
-        Logger.log("Worker {} sampled at cell {}, sampled number: {}, sampled sensor list: {}"
-                   .format(self.index, cell.index, len(sensor_index), sensor_index))
-        if len(selected_sensors) > 0:
-            for sensor in selected_sensors:
-                sensor.add_worker(self)
-            return True
-        else:
-            return False
+    # def work(self, cell):
+    #     # work进行移动和工作，随机采集一些节点内的数据，采集后进行上报。当然其采集的性能是依赖于自身honest属性。
+    #     if rand() > self._work_rate:  # 假设工作率是80%，表明在本slot内，80%会执行采集任务
+    #         return False
+    #     selected_sensors = sample(cell.sensors, randint(0, int(cell.sensor_number * self._activity)))
+    #
+    #     sensor_index = [sensor.index for sensor in selected_sensors]
+    #     Logger.log("Worker {} sampled at cell {}, sampled number: {}, sampled sensor list: {}"
+    #                .format(self.index, cell.index, len(sensor_index), sensor_index))
+    #     if len(selected_sensors) > 0:
+    #         for sensor in selected_sensors:
+    #             sensor.add_worker(self)
+    #         return True
+    #     else:
+    #         return False
 
     # 信任更新模型 这里后续可以修改
     def update_trust(self):

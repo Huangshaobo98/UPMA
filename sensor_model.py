@@ -58,13 +58,16 @@ class Sensor:
         self.__aoi.report_by_uav(current_slot)      # 对uav访问节点的aoi刷新
         for worker, value in self.__worker_success_dict.items():    # 对采集过此节点的worker进行汇报成功
             worker.add_success(value)
+        self.__worker_success_dict.clear()
         for worker, value in self.__worker_fail_dict.items():
             worker.add_fail(value)
+        self.__worker_fail_dict.clear()
 
     def report_by_workers(self, current_slot):
         if len(self.__worker_report_list) == 0:
             return
         [success_list, fail_list] = self.__aoi.report_by_worker(self.__worker_report_list, current_slot)
+        self.__worker_report_list.clear()
         for worker in success_list:
             self.__worker_success_dict[worker] += 1
         for worker in fail_list:
@@ -73,10 +76,11 @@ class Sensor:
     def add_worker(self, worker: Worker):
         self.__worker_report_list.append(worker)
 
-    def clear(self):
+    def episode_clear(self):
+        self.__worker_report_list.clear()
         self.__worker_success_dict.clear()
         self.__worker_fail_dict.clear()
-        self.__aoi.clear()
+        self.__aoi.episode_clear()
 
     @staticmethod
     def get_all_locations():

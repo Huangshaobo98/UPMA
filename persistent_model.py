@@ -1,11 +1,10 @@
 import csv
 import os
-
+from typing import List
 import numpy as np
 
 from global_parameter import Global as g
 import pandas as pd
-
 
 class Persistent:
     __persistent_directory = None
@@ -25,9 +24,11 @@ class Persistent:
     __added_header = None  # 续训时应该已经创建好了header
     __episode_added_header = None
 
+    __trained_episode = 0
+    __trained_epsilon = 1.0
+
     @staticmethod
-    def init(analysis: bool,
-             train: bool,
+    def init(train: bool,
              continue_train: bool,
              directory=""):
 
@@ -54,20 +55,43 @@ class Persistent:
         if not os.path.exists(Persistent.__data_directory):
             os.makedirs(Persistent.__data_directory)
 
-        if not analysis:    # 训练/测试模式
-            if not continue_train:                      # 非断点续训练，要干掉原有的训练日志，从0开始
-                if os.path.exists(Persistent.__model_path):
-                    os.remove(Persistent.__model_path)
-                if os.path.exists(Persistent.__data_path):
-                    os.remove(Persistent.__data_path)
-                if os.path.exists(Persistent.__episode_data_path):
-                    os.remove(Persistent.__episode_data_path)
+        if not continue_train:                      # 非断点续训练，要干掉原有的训练日志，从0开始
+            if os.path.exists(Persistent.__model_path):
+                os.remove(Persistent.__model_path)
+            if os.path.exists(Persistent.__data_path):
+                os.remove(Persistent.__data_path)
+            if os.path.exists(Persistent.__episode_data_path):
+                os.remove(Persistent.__episode_data_path)
+        else:
+            assert os.path.exists(Persistent.__model_path)
+            assert os.path.exists(Persistent.__data_path)
+            assert os.path.exists(Persistent.__episode_data_path)
 
-            Persistent.__file_handle = open(Persistent.__data_path, 'a+')   # 追加模式，方便后面存储数据
-            assert Persistent.__file_handle is not None
+            with open(Persistent.__episode_data_path) as f:
+                try:
+                    final_train_episode_info = f.readlines()[-1].split(',')
+                    Persistent.__trained_episode = int(final_train_episode_info[0])
+                    Persistent.__episode_added_header = True
+                except ValueError:
+                    Persistent.__episode_added_header = True
+                except IndexError:
+                    Persistent.__episode_added_header = False
 
-            Persistent.__file_writer = csv.writer(Persistent.__file_handle)
-            assert Persistent.__file_writer is not None
+            with open(Persistent.__data_path) as f:
+                try:
+                    final_train_data_info = f.readlines()[-1].split(',')
+                    Persistent.__trained_epsilon = float(final_train_data_info[-1])
+                    Persistent.__added_header = True
+                except ValueError:
+                    Persistent.__added_header = True
+                except IndexError:
+                    Persistent.__added_header = False
+
+        Persistent.__file_handle = open(Persistent.__data_path, 'a+')   # 追加模式，方便后面存储数据
+        assert Persistent.__file_handle is not None
+
+        Persistent.__file_writer = csv.writer(Persistent.__file_handle)
+        assert Persistent.__file_writer is not None
 
     @staticmethod
     def close():
@@ -139,3 +163,11 @@ class Persistent:
     @staticmethod
     def data_path() -> str:
         return Persistent.__data_path
+
+    @staticmethod
+    def trained_episode():
+        return Persistent.__trained_episode
+
+    @staticmethod
+    def trained_epsilon():
+        return Persistent.__trained_epsilon

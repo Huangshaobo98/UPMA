@@ -10,7 +10,7 @@ def command_parse(commands,
         'file_log': g.default_file_log,
         'train': g.default_train,
         'continue_train': g.default_continue_train,
-        'analysis': g.default_analysis,
+        # 'analysis': g.default_analysis,
         'prefix': "",
         # 'cell_limit': g.default_cell_limit,           # 边界大小
         'sensor_number': g.default_sensor_number,     # 传感器数量
@@ -66,9 +66,9 @@ def command_parse(commands,
         elif command in ("--detail_log", "-detail"):
             parameters['detail'] = True
             assert type(parameters['detail']) is bool
-        elif command in ("--analysis", "-a", "-analysis"):
-            parameters['analysis'] = True
-            assert type(parameters['analysis']) is bool
+        # elif command in ("--analysis", "-a", "-analysis"):
+        #     parameters['analysis'] = True
+        #     assert type(parameters['analysis']) is bool
         elif command in ("--console", "--console_log", "-console"):
             parameters['console_log'] = True
             assert type(parameters['console_log']) is bool

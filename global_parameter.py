@@ -12,7 +12,7 @@ class Global:
     # worker相关
     worker_out_able = True      # 可移动离开所观测小区
     worker_initial_trust = 0.5
-    worker_activity = 0.4       # 活跃度，最大可收集的节点数量/小区节点总数
+    worker_vitality = 5       # 活跃度，最大可收集的节点数量
     initial_trust = 0.5
     worker_work_rate = 0.6      # worker在每个时隙下工作的概率
     worker_start_fix = False
@@ -36,8 +36,8 @@ class Global:
 
     # 下列参数为可以通过命令行自由调整的参数
     # default_cell_limit = 6          # 边界大小
-    default_sensor_number = 10000     # 传感器数量
-    default_worker_number = 10       # worker数量
+    default_sensor_number = 5000     # 传感器数量
+    default_worker_number = 50       # worker数量
     default_max_episode = 2500      # 最大训练episode
     # default_max_slot = 3000         # 最大时隙
     default_batch_size = 256        # 批大小

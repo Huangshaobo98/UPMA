@@ -3,8 +3,11 @@ venv/
 __pycache__/
 save/
 data/t-drive/
+/data_cp/
+/save_cp/
 *.zip
 *.jpg
 *.npy
 *.log
 *.out
+
