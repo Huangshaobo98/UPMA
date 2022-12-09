@@ -13,8 +13,8 @@ class DataCleaner:
 
     def __init__(self,
                  read_thread=8,
-                 x_limit=20,
-                 y_limit=20,
+                 x_limit=16,
+                 y_limit=16,
                  x_range=[116.15, 116.64],
                  y_range=[39.72, 40.095],
                  uav_speed=15):
@@ -64,7 +64,7 @@ class DataCleaner:
         self.__coordinate = self.read_coordinate()
         self.__cell_coordinate = self.read_cell_coordinate()
         self.__worker_position = self.read_worker_position()       # 读取已经存储好的info_json，如果没有，则创建，并导入信息
-        # self.plot_scatters()
+        self.plot_scatters()
 
     def check_unpack(self):
         if not os.path.exists(self.__unpack_directory):
