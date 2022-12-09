@@ -41,7 +41,7 @@ class Global:
     default_max_episode = 2500      # 最大训练episode
     # default_max_slot = 3000         # 最大时隙
     default_batch_size = 256        # 批大小
-    default_learn_rate = 0.0005     # 学习率
+    default_learn_rate = 0.0001     # 学习率
     default_gamma = 0.9                # 折扣系数
     default_epsilon_decay = 0.999995     # 探索率衰减
     default_detail_log = False
