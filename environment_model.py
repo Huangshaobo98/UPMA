@@ -10,11 +10,121 @@ from typing import List
 from data.data_clean import DataCleaner
 from energy_model import Energy
 
+class Compare:
+    def __init__(self,
+                 x_limit,
+                 y_limit):
+        self.x_limit = x_limit
+        self.y_limit = y_limit
+        self.actions = [[0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 0], [0, 0]]
+        self.cell_visited = np.zeros(shape=(self.x_limit, self.y_limit))
+
+    def run(self, method, prev_state: State):
+        [cx, cy] = prev_state.position
+        energy_left = prev_state.energy
+        energy_consume = Energy.move_energy_cost()
+        obv_aoi = prev_state.observation_aoi_state
+        if method == "RR":
+            return self.RoundRobin(cx, cy, energy_left, energy_consume)
+        elif method == "Greedy":
+            return self.Greedy(cx, cy, obv_aoi, energy_left, energy_consume)
+        elif method == "CCPP":
+            return self.CCPP(cx, cy, obv_aoi, energy_left, energy_consume)
+        else:
+            assert False
+
+    def RoundRobin(self, cx, cy, energy_left, energy_consume):
+        if energy_left - energy_consume < 0:
+            return 6
+
+        if cx == 0:
+            if cy == 0:
+                return 2 # 起始状态移动
+            else:
+                return 0 # 返回初始位置
+
+        if cy % 2 == 0:
+            if cx == self.x_limit - 1:
+                return 4
+            else:
+                return 2
+        else:
+            if cx == 1:
+                return 4
+            else:
+                return 5
+
+    def Greedy(self, cx, cy, obv_aoi, energy_left, energy_consume):
+        if energy_left - energy_consume < 0:
+            return 6
+
+        max_aoi = 0
+        index = -1
+        for idx, act in enumerate(self.actions):
+            [nx, ny] = [cx + act[0], cy + act[1]]
+            if nx >= 0 and nx < self.x_limit and ny >= 0 and ny < self.y_limit:
+                if obv_aoi[nx, ny] > max_aoi:
+                    max_aoi = obv_aoi[nx, ny]
+                    index = idx
+
+        return index
+
+    def get_path(self, cx, cy, obv_aoi):
+        actions = np.array([(0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 0)])
+        cur_pos = [cx, cy]
+        path = np.empty(shape=(self.x_limit, self.y_limit), dtype=object)
+        path[tuple(cur_pos)] = np.array([])  #之前的代码是直接使用位置来写的，这里我觉得可以改成使用动作
+        path_AoI = np.zeros(shape=(self.x_limit, self.y_limit))
+        cover_state = np.zeros(shape=(self.x_limit, self.y_limit))
+        cover_state[tuple(cur_pos)] = 1
+        layer_cells = np.array([cur_pos])
+        layers = np.empty(shape=(2 * max(self.x_limit, self.y_limit) - 2,), dtype=object)
+        count = 0
+        while not cover_state.all():
+            new_layer_cells = np.empty(shape=(0, 2), dtype=np.int32)
+            for cell in layer_cells:
+                for act_idx, action in enumerate(actions):
+                    temp_pos = action + cell
+                    if 0 <= temp_pos[0] < self.x_limit and 0 <= temp_pos[1] < self.y_limit \
+                            and cover_state[tuple(temp_pos)] == 0:
+                        if path_AoI[tuple(temp_pos)] < path_AoI[tuple(cell)] + obv_aoi[tuple(temp_pos)]:
+                            path_AoI[tuple(temp_pos)] = path_AoI[tuple(cell)] + obv_aoi[tuple(temp_pos)]
+                            path[tuple(temp_pos)] = np.append(path[tuple(cell)], act_idx)
+                            new_layer_cells = np.vstack((new_layer_cells, temp_pos))
+            layer_cells = np.unique(new_layer_cells, axis=0)
+            for cell in layer_cells:
+                cover_state[tuple(cell)] = 1
+            layers[count] = layer_cells
+            count += 1
+        return path, path_AoI, layers
+
+    def CCPP(self, cx, cy, obv_aoi, energy_left, energy_consume):
+        if energy_left - energy_consume < 0:
+            return 6
+        path, path_AoI, layers = self.get_path(cx, cy, obv_aoi)
+        if self.cell_visited.all():
+            self.cell_visited = np.zeros(shape=(self.x_limit, self.y_limit))
+            self.cell_visited[cx, cy] = 1
+        max_val = 0
+        max_path_act = np.empty(shape=(0, 2), dtype=np.int32)
+        for layer in layers:
+            for cell in layer:
+                if self.cell_visited[tuple(cell)] == 0:
+                    if path_AoI[tuple(cell)] > max_val:
+                        max_val = path_AoI[tuple(cell)]
+                        max_path_act = path[tuple(cell)][0]
+            if max_val > 0:
+                break
+        return max_path_act
+
+
 
 class Environment:
     def __init__(self,
                  train: bool,
                  continue_train: bool,
+                 compare:bool,
+                 compare_method: str,
                  sensor_number: int,
                  worker_number: int,
                  max_episode: int,
@@ -65,16 +175,16 @@ class Environment:
         Energy.init(cleaner)
 
         # agent
-        self.__agent = DQNAgent(cleaner.cell_limit, action_size=7, gamma=gamma, epsilon=Persistent.trained_epsilon(),
-                                epsilon_decay=epsilon_decay, lr=learn_rate, train=train, continue_train=continue_train,
-                                model_path=Persistent.model_path())
+        if not compare:
+            self.__agent = DQNAgent(cleaner.cell_limit, action_size=7, gamma=gamma, epsilon=Persistent.trained_epsilon(),
+                                    epsilon_decay=epsilon_decay, lr=learn_rate, train=train, continue_train=continue_train,
+                                    model_path=Persistent.model_path())
+        else:
+            self.__agent = None
 
         # network model
-        self.__cell = Cell.uniform_generator_with_position(cleaner.x_limit,
-                                                           cleaner.y_limit,
-                                                           cleaner.cell_coordinate,
-                                                           sensor_number,
-                                                           cleaner.side_length)
+        self.__cell = Cell.uniform_generator_with_position(cleaner,
+                                                           sensor_number)
         WorkerBase.set_cleaner(cleaner)
         self.__uav = UAV(cleaner.cell_limit)
         self.__worker = [Worker(i, cleaner.worker_position[i]) for i in range(worker_number)]
@@ -203,8 +313,11 @@ class Environment:
         #     self.__cell[tup[0], tup[1]].worker_visited(self.__current_slot)
 
     def worker_trust_refresh(self):
+
         for work in self.__worker:
-            work.update_trust()
+            [trust, direct, recom] = work.update_trust()
+            # Logger.log("Worker {}: trust {:.4f}, direct {:.4f}, recom {:.4f}"
+            #            .format(work.index, trust, direct, recom))
 
     def uav_step_state_detail(self, prev_state: State, next_state: State,
                               action: List[int], action_values: List[float], reward: float, epsilon: float
@@ -349,7 +462,8 @@ class Environment:
         }
         Persistent.save_episode_data(episode_data)
         self.episode_clear()
-        self.__agent.save(Persistent.model_path())
+        if self.__train:
+            self.__agent.save(Persistent.model_path())
 
     def start(self):
         np.set_printoptions(suppress=True, precision=3)

@@ -58,8 +58,8 @@ class WorkerBase:
         # self._y_start = y_start
         # self._x = x_start
         # self._y = y_start
-        self._initial_trust = initial_trust
-        self._trust = initial_trust
+        self.initial_trust = initial_trust
+        self.trust = initial_trust
         # self._out_able = out_able
         # self._fix_start = fix_start
 
@@ -76,9 +76,6 @@ class WorkerBase:
     #         self._y = (self._y + dy) % WorkerBase.cell_limit
     #     return self._x, self._y
 
-    @property
-    def trust(self):
-        return self._trust
 
     def clear(self):
         # if self._fix_start:
@@ -87,7 +84,7 @@ class WorkerBase:
         # else:
         #     self._x = randint(0,  WorkerBase.cell_limit - 1)
         #     self._y = randint(0,  WorkerBase.cell_limit - 1)
-        self._trust = self._initial_trust
+        self.trust = self.initial_trust
 
 
 class Worker(WorkerBase):
@@ -101,6 +98,8 @@ class Worker(WorkerBase):
                  # out_able: bool,
                  # work_rate: float = g.worker_work_rate,
                  vitality: int = g.worker_vitality,
+                 direct_window: int = 10,
+                 recom_window: int = 20,
                  ):
         super(Worker, self).__init__(worker_initial_trust)
         self._id = index
@@ -108,13 +107,40 @@ class Worker(WorkerBase):
         # self._work_rate = work_rate
         self._honest = 1    # ?
         self._vitality = vitality   # 活性，指的是每个时隙最多采集多少个传感器节点
-        self._success_cnt = 0
-        self._fail_cnt = 0
+        self._direct_trust = self.initial_trust
+        self._direct_trust_fresh = False
+        self._temp_direct_trust_success = 0
+        self._temp_direct_trust_fail = 0
+        self._direct_trust_success = []
+        self._direct_trust_fail = []
+        self._direct_limit = direct_window
+
+        self._weight = 0.7
+
+        self._recom_trust = self.initial_trust
+        self._recom_trust_fresh = False
+        self._recom_trust_list = []
+        self._recom_result_list = []
+        self._recom_limit = recom_window
+        # self._success_cnt = 0
+        # self._fail_cnt = 0
 
     def episode_clear(self):
         super(Worker, self).clear()
-        self._success_cnt = 0
-        self._fail_cnt = 0
+        self._direct_trust = self.initial_trust
+        self._direct_trust_fresh = False
+        self._temp_direct_trust_success = 0
+        self._temp_direct_trust_fail = 0
+        self._direct_trust_success = []
+        self._direct_trust_fail = []
+        self._direct_limit = 10
+
+
+        self._recom_trust = self.initial_trust
+        self._recom_trust_fresh = False
+        self._recom_trust_list = []
+        self._recom_result_list = []
+        self._recom_limit = 20
 
     # @staticmethod
     # def worker_move_model():
@@ -156,15 +182,48 @@ class Worker(WorkerBase):
 
     # 信任更新模型 这里后续可以修改
     def update_trust(self):
-        s = self._success_cnt / (self._success_cnt + self._fail_cnt + 1)
-        f = 1 / (self._success_cnt + self._fail_cnt + 1)
-        self._trust = (2 * s + f) / 2
+        if self._direct_trust_fresh:
+            assert len(self._direct_trust_success) == len(self._direct_trust_fail)
+            self._direct_trust_success.append(self._temp_direct_trust_success)
+            self._direct_trust_fail.append(self._temp_direct_trust_fail)
+            if len(self._direct_trust_success) > self._direct_limit:
+                self._direct_trust_success.pop(0)
+            if len(self._direct_trust_fail) > self._direct_limit:
+                self._direct_trust_fail.pop(0)
+            self._direct_trust = 0.5 * (2 * sum(self._direct_trust_success) + 1) \
+                                 / (sum(self._direct_trust_success) + sum(self._direct_trust_fail) + 1)
+        if self._recom_trust_fresh:
+            assert len(self._recom_trust_list) == len(self._recom_result_list)
+            while len(self._recom_trust_list) > self._recom_limit:
+                self._recom_trust_list.pop(0)
+            while len(self._recom_result_list) > self._recom_limit:
+                self._recom_result_list.pop(0)
 
-    def add_success(self, cnt):
-        self._success_cnt += cnt
+            self._recom_trust = sum([i*j for i, j in zip(self._recom_trust_list, self._recom_result_list)]) \
+                                / sum(self._recom_trust_list)
 
-    def add_fail(self, cnt):
-        self._fail_cnt += cnt
+        self.trust = self._direct_trust * self._weight + self._recom_trust * (1 - self._weight)
+        self._direct_trust_fresh = False
+        self._recom_trust_fresh = False
+        self._temp_direct_trust_success = 0
+        self._temp_direct_trust_fail = 0
+
+        return [self.trust, self._direct_trust, self._recom_trust]
+
+    def add_direct_success(self, cnt):
+        self._direct_trust_fresh = True
+        self._temp_direct_trust_success += cnt
+
+    def add_direct_fail(self, cnt):
+        self._direct_trust_fresh = True
+        self._temp_direct_trust_fail += cnt
+
+    def add_recom_result(self, worker, result:bool):
+        if self == worker:
+            return
+        self._recom_trust_fresh = True
+        self._recom_trust_list.append(worker.trust)
+        self._recom_result_list.append(1.0 if result else 0.0)
 
 
 class UAV(WorkerBase):

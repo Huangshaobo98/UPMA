@@ -6,18 +6,19 @@ from zipfile import ZipFile
 import numpy as np
 from threading import Lock, Thread
 import matplotlib.pyplot as plt
-
+from numpy import random
 
 class DataCleaner:
     earth_radian_coefficient = pi * 6371393 / 180
 
     def __init__(self,
                  read_thread=8,
-                 x_limit=16,
-                 y_limit=16,
+                 x_limit=10,
+                 y_limit=10,
                  x_range=[116.15, 116.64],
                  y_range=[39.72, 40.095],
-                 uav_speed=15):
+                 uav_speed=15,
+                 sen_number=20000):
 
         current_work_path = os.path.split(os.path.realpath(__file__))[0]
         data_set_json_path = current_work_path + '/data_set.json'
@@ -30,6 +31,7 @@ class DataCleaner:
         self.__x_range = x_range
         self.__y_range = y_range
         self.__uav_speed = uav_speed
+        self.__sensor_number = sen_number
 
         self.__file_number = json_file['number']
         self.__prefix = json_file['prefix']
@@ -47,9 +49,19 @@ class DataCleaner:
         self.__cell_coordinate_directory = current_work_path + '/cell_coordinate'
         self.__cell_coordinate_path = self.__cell_coordinate_directory + '.npy'
 
+        self.__sensor_cell_directory = current_work_path + '/sensor_cell_coordinate' + str(sen_number)
+        self.__sensor_cell_path = self.__cell_coordinate_path + '.npy'
+
+        self.__sensor_diff_directory = current_work_path + '/sensor_diff_coordinate' + str(sen_number)
+        self.__sensor_diff_path = self.__cell_coordinate_path + '.npy'
+
         self.__coordinate = np.empty(shape=(0, 2))
         self.__worker_position = np.empty(shape=(self.__file_number,), dtype=dict)
         self.__cell_coordinate = np.empty(shape=(x_limit, y_limit), dtype=np.ndarray)
+
+        self.__sensor_cell = np.empty(shape=(0, 2))
+        self.__sensor_diff = np.empty(shape=(0, 2))
+
         self.__min_second = inf
         self.__max_second = 0
         self.__total_number = 0
@@ -64,7 +76,10 @@ class DataCleaner:
         self.__coordinate = self.read_coordinate()
         self.__cell_coordinate = self.read_cell_coordinate()
         self.__worker_position = self.read_worker_position()       # 读取已经存储好的info_json，如果没有，则创建，并导入信息
-        self.plot_scatters()
+        self.__sensor_cell = self.read_sensor_cell()
+        self.__sensor_diff = self.read_sensor_diff()
+
+        # self.plot_scatters()
 
     def check_unpack(self):
         if not os.path.exists(self.__unpack_directory):
@@ -93,6 +108,28 @@ class DataCleaner:
         np.save(self.__worker_position_directory, self.__worker_position)
         print("worker saved")
         return self.__worker_position
+
+    def read_sensor_cell(self):
+        if os.path.exists(self.__sensor_cell_path):
+            return np.load(self.__sensor_cell_path, allow_pickle=True)
+        random.seed(10)
+        sensor_x = random.randint(0, self.x_limit, self.sensor_number)
+        sensor_y = random.randint(0, self.y_limit, self.sensor_number)
+
+        ret = np.stack([sensor_x, sensor_y]).T
+        np.save(self.__sensor_cell_directory, ret)
+        return ret
+
+    def read_sensor_diff(self):
+        if os.path.exists(self.__sensor_diff_path):
+            return np.load(self.__sensor_diff_path, allow_pickle=True)
+        random.seed(10)
+        sensor_x_diff = random.uniform(-self.side_length * sqrt(3) / 2, self.side_length * sqrt(3) / 2, self.sensor_number)
+        sensor_y_diff = np.array([random.uniform(abs(x_diff) / sqrt(3) - self.side_length,
+                                                 - abs(x_diff) / sqrt(3) + self.side_length) for x_diff in sensor_x_diff])
+        ret = np.stack([sensor_x_diff, sensor_y_diff]).T
+        np.save(self.__sensor_diff_directory, ret)
+        return ret
 
     def task_read_worker_position(self, ind, info_json):
         side_length = info_json['side_length']
@@ -250,7 +287,8 @@ class DataCleaner:
             'y_range': [self.__y_range[0], self.__y_range[0] + (self.__y_limit - 1) * y_span],
             'x_limit': self.__x_limit,
             'y_limit': self.__y_limit,
-            'uav_speed': self.__uav_speed
+            'uav_speed': self.__uav_speed,
+            'sensor_number': self.__sensor_number
         }
 
         # 处理时间信息，寻找车辆记录的起始时间和结束时间
@@ -332,6 +370,14 @@ class DataCleaner:
         return self.__data_directory + self.__prefix + str(ind) + self.__suffix
 
     @property
+    def sensor_cell(self):
+        return self.__sensor_cell
+
+    @property
+    def sensor_diff(self):
+        return self.__sensor_diff
+
+    @property
     def worker_coordinate(self):
         return self.__coordinate
 
@@ -355,6 +401,9 @@ class DataCleaner:
     def cell_limit(self):
         return [self.__x_limit, self.__y_limit]
 
+    @property
+    def sensor_number(self):
+        return self.__info_json['sensor_number']
     @property
     def side_length(self):
         return self.__info_json['side_length']
@@ -389,3 +438,4 @@ class DataCleaner:
     
 if __name__ == "__main__":
     cleaner = DataCleaner()
+    cleaner.plot_scatters()

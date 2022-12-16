@@ -1,11 +1,11 @@
 import numpy as np
-
+import io
 from sensor_model import Sensor
 from numpy import random
 from math import sqrt
 from data.data_clean import DataCleaner
 import matplotlib.pyplot as plt
-
+from PIL import Image
 
 class Cell:
     def __init__(self, x, y, position, side_length):
@@ -108,15 +108,27 @@ class Cell:
         axis.plot(x_val, y_val, color='k', linewidth=1)
 
     @staticmethod
-    def plot_cells(cells: np.ndarray):
+    def plot_cells(cleaner: DataCleaner, cells: np.ndarray):
         [sensor_x, sensor_y] = Sensor.get_all_locations()
-        map_fig = plt.figure(figsize=(10, 8), dpi=450)
+        map_fig = plt.figure(figsize=(10, 8), dpi=300)
         ax = map_fig.add_subplot(111)
+        np.random.seed(10)
+        sp = cleaner.worker_coordinate.shape[0]
+        sample_nodes = cleaner.worker_coordinate[np.random.choice(sp, int(sp/50), False), :]
+        work_p = ax.scatter(cleaner.worker_coordinate[:, 0], cleaner.worker_coordinate[:, 1], color='gray', marker='o', s=0.01, alpha=0.5)
         for row in cells:
             for cell in row:
                 cell.plot_cell(ax)
-        ax.scatter(sensor_x, sensor_y, color='r')
-        plt.savefig('./cell_sensors.jpg')
+
+        sen_p = ax.scatter(sensor_x, sensor_y, color='red', marker='o', s=2)
+        uav_p = ax.scatter(cleaner.cell_coordinate[5,5][0], cleaner.cell_coordinate[5,5][1], color='blue', marker='o', s=25)
+        plt.xlim(cleaner.x_range[0], cleaner.x_range[1])
+        plt.ylim(cleaner.y_range[0], cleaner.y_range[1])
+        plt.xlabel("Longitude")
+        plt.ylabel("Latitude")
+        plt.legend((sen_p, uav_p), ("SNs", "UAV"), loc='lower right')
+        plt.savefig("cell_sensors.tif")
+
 
     def uav_visited(self, current_slot):
         for sensor in self.__sensors:
@@ -140,30 +152,24 @@ class Cell:
         return ret
 
     @staticmethod
-    def uniform_generator_with_position(x_limit: int,
-                                        y_limit: int,
-                                        positions: np.ndarray,
+    def uniform_generator_with_position(cleaner,
                                         sensor_number: int,
-                                        side_length: float,
                                         seed: object = 10) -> np.ndarray:
 
-        ret_cell = np.empty(shape=(x_limit, y_limit), dtype=object)
-        for x in range(x_limit):
-            for y in range(y_limit):
-                ret_cell[x, y] = Cell(x, y, positions[x][y], side_length)
+        ret_cell = np.empty(shape=(cleaner.x_limit, cleaner.y_limit), dtype=object)
+        cell_positions = cleaner.cell_coordinate
+        side_length = cleaner.side_length
+        sensor_cell = cleaner.sensor_cell
+        sensor_diff = cleaner.sensor_diff
 
-        random.seed(seed)
-        sensor_x = random.randint(0, x_limit, sensor_number)
-        sensor_y = random.randint(0, y_limit, sensor_number)
-
-        sensor_x_diff = random.uniform(-side_length * sqrt(3) / 2, side_length * sqrt(3) / 2, sensor_number)
-        sensor_y_diff = np.array([random.uniform(abs(x_diff) / sqrt(3) - side_length,
-                                                 - abs(x_diff) / sqrt(3) + side_length) for x_diff in sensor_x_diff])
+        for x in range(cleaner.x_limit):
+            for y in range(cleaner.y_limit):
+                ret_cell[x, y] = Cell(x, y, cell_positions[x][y], side_length)
 
         # print("sensors_x" + str(sensor_x[:20]) + 'sensor_y' + str(sensor_y[:20]))
         # print("x_diff" + str(sensor_x_diff[:20]) + 'y_diff' + str(sensor_y_diff[:20]))
         for i in range(sensor_number):
-            Sensor(i, sensor_x_diff[i], sensor_y_diff[i], ret_cell[sensor_x[i], sensor_y[i]])
+            Sensor(i, sensor_diff[i,0], sensor_diff[i,1], ret_cell[sensor_cell[i,0], sensor_cell[i,1]])
 
         return ret_cell
 
@@ -171,9 +177,5 @@ class Cell:
 
 if __name__ == '__main__':
     cleaner = DataCleaner()
-    c = Cell.uniform_generator_with_position(cleaner.x_limit,
-                                             cleaner.y_limit,
-                                             cleaner.cell_coordinate,
-                                             5000,
-                                             cleaner.side_length)
-    Cell.plot_cells(c)
+    c = Cell.uniform_generator_with_position(cleaner, 5000)
+    Cell.plot_cells(cleaner, c)

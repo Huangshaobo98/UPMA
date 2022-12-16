@@ -37,14 +37,15 @@ class Global:
     # 下列参数为可以通过命令行自由调整的参数
     # default_cell_limit = 6          # 边界大小
     default_sensor_number = 5000     # 传感器数量
-    default_worker_number = 10       # worker数量
-    default_max_episode = 2500      # 最大训练episode
+    default_worker_number = 50       # worker数量
+    default_max_episode = 500      # 最大训练episode
     # default_max_slot = 3000         # 最大时隙
     default_batch_size = 256        # 批大小
     default_learn_rate = 0.0001     # 学习率
     default_gamma = 0.9                # 折扣系数
-    default_epsilon_decay = 0.999995     # 探索率衰减
+    default_epsilon_decay = 0.99995     # 探索率衰减
     default_detail_log = False
+    default_compare = False
 
     # 持久化参数
     default_train = True
@@ -57,6 +58,7 @@ class Global:
     # 数据分析模式，开启此状态将读取训练/测试数据进行数据分析，绘图等工作
     default_analysis = False
 
+    default_compare_method = ""
     @staticmethod
     def energy_reward_calculate(x):
         return - 2 * exp(Global.energy_reward_coefficient * x) \

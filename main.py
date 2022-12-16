@@ -18,6 +18,8 @@ class Main:
         # self.analysis = parameters['analysis']
         Persistent.init(train=parameters['train'],
                         continue_train=parameters['continue_train'],
+                        compare=parameters['compare'],
+                        compare_method=parameters['compare_method'],
                         directory=parameters['prefix'])
         State.init(sensor_number=parameters['sensor_number'],
                    cell_size=cleaner.cell_limit)
@@ -26,6 +28,8 @@ class Main:
                     directory=parameters['prefix'])
         self.env = Environment(train=parameters['train'],
                                continue_train=parameters['continue_train'],
+                               compare=parameters['compare'],
+                               compare_method=parameters['compare_method'],
                                sensor_number=parameters['sensor_number'],
                                worker_number=parameters['worker_number'],
                                max_episode=parameters['max_episode'],
@@ -44,7 +48,7 @@ class Main:
 
 
 if __name__ == '__main__':
-    processor = Main({'worker_number': 10000})
+    processor = Main({'learn_rate': 0.00005, 'gamma': 0.9, 'worker_number': 0})
     processor.start()
     processor.end()
 

@@ -109,7 +109,7 @@ class State:
 
 class DQNAgent:
     def __init__(self, cell_size, action_size, gamma=0.75, epsilon=1, epsilon_decay=0.99995,
-                 epsilon_min=0.05, lr=0.0005, dueling=True, train=True, continue_train=False, model_path=""):
+                 epsilon_min=0.0, lr=0.0005, dueling=True, train=True, continue_train=False, model_path=""):
         # 暂且设定的动作集合：'h': 六个方向的单元移动+一种什么都不做的悬浮，在特定小区的悬浮可以看做是进行了充电操作
         [self.x_size, self.y_size] = cell_size
         self.action_size = action_size

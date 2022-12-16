@@ -30,6 +30,8 @@ class Persistent:
     @staticmethod
     def init(train: bool,
              continue_train: bool,
+             compare: bool,
+             compare_method: str = "",
              directory=""):
 
         if not directory == "":
@@ -42,11 +44,15 @@ class Persistent:
         Persistent.__episode_added_header = continue_train
 
         Persistent.__model_directory = Persistent.__persistent_directory + "/model"
-        Persistent.__data_directory = Persistent.__persistent_directory + ("/train" if train else "/test")
-        Persistent.__network_model_directory = Persistent.__data_directory + "/network_model"
+        if compare:
+            Persistent.__data_directory = Persistent.__persistent_directory + "/compare"
+            Persistent.__data_path = Persistent.__data_directory + "/" + str(compare_method) + ".csv"
+        else:
+            Persistent.__data_directory = Persistent.__persistent_directory + ("/train" if train else "/test")
+            Persistent.__data_path = Persistent.__data_directory + "/running.csv"
 
+        Persistent.__network_model_directory = Persistent.__data_directory + "/network_model"
         Persistent.__model_path = Persistent.__model_directory + "/model.h5"
-        Persistent.__data_path = Persistent.__data_directory + "/running.csv"
         Persistent.__episode_data_path = Persistent.__data_directory + "/episode.csv"
         Persistent.__network_model_path = Persistent.__data_directory + ".npz"
 
@@ -55,37 +61,38 @@ class Persistent:
         if not os.path.exists(Persistent.__data_directory):
             os.makedirs(Persistent.__data_directory)
 
-        if not continue_train:                      # 非断点续训练，要干掉原有的训练日志，从0开始
-            if os.path.exists(Persistent.__model_path):
-                os.remove(Persistent.__model_path)
-            if os.path.exists(Persistent.__data_path):
-                os.remove(Persistent.__data_path)
-            if os.path.exists(Persistent.__episode_data_path):
-                os.remove(Persistent.__episode_data_path)
-        else:
-            assert os.path.exists(Persistent.__model_path)
-            assert os.path.exists(Persistent.__data_path)
-            assert os.path.exists(Persistent.__episode_data_path)
+        if train:
+            if not continue_train:                      # 非断点续训练，要干掉原有的训练日志，从0开始
+                if os.path.exists(Persistent.__model_path):
+                    os.remove(Persistent.__model_path)
+                if os.path.exists(Persistent.__data_path):
+                    os.remove(Persistent.__data_path)
+                if os.path.exists(Persistent.__episode_data_path):
+                    os.remove(Persistent.__episode_data_path)
+            else:
+                assert os.path.exists(Persistent.__model_path)
+                assert os.path.exists(Persistent.__data_path)
+                assert os.path.exists(Persistent.__episode_data_path)
 
-            with open(Persistent.__episode_data_path) as f:
-                try:
-                    final_train_episode_info = f.readlines()[-1].split(',')
-                    Persistent.__trained_episode = int(final_train_episode_info[0])
-                    Persistent.__episode_added_header = True
-                except ValueError:
-                    Persistent.__episode_added_header = True
-                except IndexError:
-                    Persistent.__episode_added_header = False
+                with open(Persistent.__episode_data_path) as f:
+                    try:
+                        final_train_episode_info = f.readlines()[-1].split(',')
+                        Persistent.__trained_episode = int(final_train_episode_info[0])
+                        Persistent.__episode_added_header = True
+                    except ValueError:
+                        Persistent.__episode_added_header = True
+                    except IndexError:
+                        Persistent.__episode_added_header = False
 
-            with open(Persistent.__data_path) as f:
-                try:
-                    final_train_data_info = f.readlines()[-1].split(',')
-                    Persistent.__trained_epsilon = float(final_train_data_info[-1])
-                    Persistent.__added_header = True
-                except ValueError:
-                    Persistent.__added_header = True
-                except IndexError:
-                    Persistent.__added_header = False
+                with open(Persistent.__data_path) as f:
+                    try:
+                        final_train_data_info = f.readlines()[-1].split(',')
+                        Persistent.__trained_epsilon = float(final_train_data_info[-1])
+                        Persistent.__added_header = True
+                    except ValueError:
+                        Persistent.__added_header = True
+                    except IndexError:
+                        Persistent.__added_header = False
 
         Persistent.__file_handle = open(Persistent.__data_path, 'a+')   # 追加模式，方便后面存储数据
         assert Persistent.__file_handle is not None

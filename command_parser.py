@@ -21,7 +21,9 @@ def command_parse(commands,
         'learn_rate': g.default_learn_rate,     # 学习率
         'gamma': g.default_gamma,                # 折扣系数
         'epsilon_decay': g.default_epsilon_decay,     # 探索率衰减
-        'detail': g.default_detail_log
+        'detail': g.default_detail_log,
+        'compare': g.default_compare,
+        'compare_method': g.default_compare_method
     }
     for key, value in kwargs.items():
         parameters[key] = value
@@ -75,6 +77,10 @@ def command_parse(commands,
         elif command in ("--file", "--file_log", "-file"):
             parameters['file_log'] = True
             assert type(parameters['file_log']) is bool
+        elif command in ("-compare", "--compare"):
+            parameters['compare'] = True
+            parameters['compare_method'] = next(command_iter)
+            assert parameters['compare_method'] in ('RR', 'CCPP', 'Greedy')
         elif command in ("--test", "--train", "-train", "-test"):
             if set_train:
                 raise ValueError("Command error, can not set train/test mode at the same time")

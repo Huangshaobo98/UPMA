@@ -17,8 +17,12 @@ def process(kwargs):
 
 def learn_train_test():
     workers = []
-    for i in (0.001, 0.005, 0.0001, 0.0005, 0.00001, 0.00005):
-        workers.append(Process(target=process, args=({'learn_rate': i},)))
+    # for i in (0.001, 0.005, 0.0001, 0.0005, 0.00001, 0.00005):
+    #     workers.append(Process(target=process, args=({'learn_rate': i, 'gamma': 0.9},)))
+    # for i in (0.001, 0.005, 0.0001, 0.0005, 0.00001, 0.00005):
+    #     workers.append(Process(target=process, args=({'learn_rate': i, 'gamma': 0.95},)))
+    for i in (0.001, 0.0001, 0.0005, 0.00005):
+        workers.append(Process(target=process, args=({'learn_rate': i, 'gamma': 0.75},)))
     return workers
 
 def gamma_train_test():
@@ -27,14 +31,25 @@ def gamma_train_test():
         workers.append(Process(target=process, args=({'gamma': i},)))
     return workers
 
+def worker_train_test():
+    workers = []
+    for i in (10, 100, 500, 1000, 5000, 10000):
+        workers.append(Process(target=process, args=({'worker_number': i, 'gamma': 0.9, 'learn_rate': 0.00005},)))
+    return workers
+
+def sensor_train_test():
+    workers = []
+    for i in (500, 1000, 10000):
+        workers.append(Process(target=process, args=({'sensor_number': i, 'gamma': 0.9, 'learn_rate': 0.00005},)))
+    return workers
 
 if __name__ == '__main__':
 
     signal.signal(signal.SIGTERM, signal_handler)
     print("master process: " + str(os.getpid()) + "\n", end="")
 
-    workers.extend(learn_train_test())
-    workers.extend(gamma_train_test())
+    workers.extend(sensor_train_test())
+    # workers.extend(gamma_train_test())
 
     for worker in workers:
         worker.daemon = True

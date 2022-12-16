@@ -10,4 +10,7 @@ data/t-drive/
 *.npy
 *.log
 *.out
-
+*.fig
+*.tif
+/save*
+nohup*
