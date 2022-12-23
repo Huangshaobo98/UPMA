@@ -1,17 +1,21 @@
-# Age of Information (AoI) optimization by UAV joint worker nodes based on deep reinforcement learning algorithm D3QN
+# Age of Information (AoI) optimization by joint UAV and worker nodes based on deep reinforcement learning algorithm D3QN
 ## Finished progress
 1. Network model
 2. D3QN adaptation
 3. Energy model adaptation
 4. Basic bug fix
-5. AoI model adaptation (Partially completed)
+5. AoI model adaptation
 6. Data persistence
 7. Train
+8. Trust model (direct trust and recommendation trust)
+9. Motion model of worker node (Not provide)
+10. Comparison with traditional strategies
 
-## Next work
-1. Trust model(maybe based on past paper)
-2. Motion model of worker node
-3. Comparison with traditional strategies
+## Current work
+1. Energy consumption of data transmit
+2. More network scales ?
+
+
 
 ## How to run
 ```shell
