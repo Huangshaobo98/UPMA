@@ -11,16 +11,17 @@ import sys
 
 
 class Main:
-    def __init__(self, kwargs: dict = {}):
+    def __init__(self, kwargs: dict = {'cleaner': DataCleaner()}):
         tf.config.set_visible_devices(tf.config.list_physical_devices("CPU"))
         parameters = command_parse(sys.argv[1:], kwargs)
-        cleaner = DataCleaner()
+        cleaner = kwargs['cleaner']
         # self.analysis = parameters['analysis']
         Persistent.init(train=parameters['train'],
                         continue_train=parameters['continue_train'],
                         compare=parameters['compare'],
                         compare_method=parameters['compare_method'],
-                        directory=parameters['prefix'])
+                        directory=parameters['prefix'],
+                        suffix=parameters['suffix'])
         State.init(sensor_number=parameters['sensor_number'],
                    cell_size=cleaner.cell_limit)
         Logger.init(console_log=parameters['console_log'],
@@ -38,6 +39,11 @@ class Main:
                                learn_rate=parameters['learn_rate'],
                                gamma=parameters['gamma'],
                                detail=parameters['detail'],
+                               seed=parameters['seed'],
+                               mali_rate=parameters['malicious'],
+                               win_len=parameters['windows_length'],
+                               pho=parameters['pho'],
+                               random_task_assignment=parameters['random_assignment'],
                                cleaner=cleaner)
 
     def start(self):
@@ -48,7 +54,10 @@ class Main:
 
 
 if __name__ == '__main__':
-    processor = Main({'learn_rate': 0.00005, 'gamma': 0.9, 'worker_number': 0})
+    # CCPP Greedy RR
+    processor = Main({'learn_rate': 0.00005, 'gamma': 0.9,
+                      'sensor_number': 1000, 'train': False,
+                      'compare': True, 'compare_method': 'CCPP'})
     processor.start()
     processor.end()
 

@@ -32,7 +32,8 @@ class Persistent:
              continue_train: bool,
              compare: bool,
              compare_method: str = "",
-             directory=""):
+             directory="",
+             suffix=""):
 
         if not directory == "":
             Persistent.__persistent_directory = directory
@@ -46,10 +47,11 @@ class Persistent:
         Persistent.__model_directory = Persistent.__persistent_directory + "/model"
         if compare:
             Persistent.__data_directory = Persistent.__persistent_directory + "/compare"
-            Persistent.__data_path = Persistent.__data_directory + "/" + str(compare_method) + ".csv"
+            Persistent.__data_path = Persistent.__data_directory + "/" + str(compare_method) + suffix + ".csv"
         else:
             Persistent.__data_directory = Persistent.__persistent_directory + ("/train" if train else "/test")
-            Persistent.__data_path = Persistent.__data_directory + "/running.csv"
+            Persistent.__data_path = Persistent.__data_directory + ("/running.csv" if train else
+                                                                    "/Test" + suffix + ".csv")
 
         Persistent.__network_model_directory = Persistent.__data_directory + "/network_model"
         Persistent.__model_path = Persistent.__model_directory + "/model.h5"
@@ -94,6 +96,8 @@ class Persistent:
                     except IndexError:
                         Persistent.__added_header = False
 
+        if not train and os.path.exists(Persistent.__data_path):
+            os.remove(Persistent.__data_path)
         Persistent.__file_handle = open(Persistent.__data_path, 'a+')   # 追加模式，方便后面存储数据
         assert Persistent.__file_handle is not None
 
@@ -170,6 +174,10 @@ class Persistent:
     @staticmethod
     def data_path() -> str:
         return Persistent.__data_path
+
+    @staticmethod
+    def data_directory() -> str:
+        return Persistent.__data_directory
 
     @staticmethod
     def trained_episode():

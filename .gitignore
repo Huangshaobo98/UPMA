@@ -5,6 +5,7 @@ save/
 data/t-drive/
 /data_cp/
 /save_cp/
+/figure/
 *.zip
 *.jpg
 *.npy

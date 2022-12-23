@@ -1,5 +1,9 @@
+import os.path
 from random import random as rand
 from random import choice, sample, randint
+
+import numpy as np
+
 from global_parameter import Global as g
 from energy_model import Energy
 from logger import Logger
@@ -98,14 +102,17 @@ class Worker(WorkerBase):
                  # out_able: bool,
                  # work_rate: float = g.worker_work_rate,
                  vitality: int = g.worker_vitality,
+                 malicious: bool = False,
                  direct_window: int = 10,
                  recom_window: int = 20,
+                 pho: float = 0.7
                  ):
         super(Worker, self).__init__(worker_initial_trust)
         self._id = index
         self._work_position = positions
         # self._work_rate = work_rate
-        self._honest = 1    # ?
+        self.malicious = malicious
+        self._honest = 1 if not malicious else 0    # ?
         self._vitality = vitality   # 活性，指的是每个时隙最多采集多少个传感器节点
         self._direct_trust = self.initial_trust
         self._direct_trust_fresh = False
@@ -115,7 +122,7 @@ class Worker(WorkerBase):
         self._direct_trust_fail = []
         self._direct_limit = direct_window
 
-        self._weight = 0.7
+        self._weight = pho
 
         self._recom_trust = self.initial_trust
         self._recom_trust_fresh = False
@@ -225,6 +232,23 @@ class Worker(WorkerBase):
         self._recom_trust_list.append(worker.trust)
         self._recom_result_list.append(1.0 if result else 0.0)
 
+    @staticmethod
+    def get_malicious_rate_data(rate=0):
+        file_name = 'worker_malicious_' + str(rate) + '.npy'
+        if os.path.exists(file_name):
+            return np.load(file_name)
+        else:
+            return Worker.generate_worker_malicious_rate(rate)
+
+    @staticmethod
+    def generate_worker_malicious_rate(rate):
+        file_name = 'worker_malicious_' + str(rate) + '.npy'
+        if os.path.exists(file_name):
+            return np.load(file_name)
+        malicious = np.random.random(size=(10357,)) < rate
+        np.save(file_name, malicious)
+        return malicious
+
 
 class UAV(WorkerBase):
     def __init__(self, cell_limit):
@@ -297,3 +321,11 @@ class UAV(WorkerBase):
     @property
     def charge_state(self) -> bool:
         return self.__charge_state
+
+if __name__ == '__main__':
+    Worker.generate_worker_malicious_rate(0)
+    Worker.generate_worker_malicious_rate(1)
+    Worker.generate_worker_malicious_rate(0.25)
+    Worker.generate_worker_malicious_rate(0.5)
+    Worker.generate_worker_malicious_rate(0.75)
+

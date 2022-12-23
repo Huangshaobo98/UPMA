@@ -23,7 +23,12 @@ def command_parse(commands,
         'epsilon_decay': g.default_epsilon_decay,     # 探索率衰减
         'detail': g.default_detail_log,
         'compare': g.default_compare,
-        'compare_method': g.default_compare_method
+        'compare_method': g.default_compare_method,
+        'malicious': g.default_malicious,
+        'windows_length': g.default_windows_length,
+        'suffix': "",
+        'pho': g.default_pho,
+        'random_assignment': g.default_random_assignment,
     }
     for key, value in kwargs.items():
         parameters[key] = value
@@ -95,6 +100,13 @@ def command_parse(commands,
             assert type(parameters['continue_train']) is bool
         else:
             raise ValueError("Command error at \"{}\", try ./main.py or ./main.py --train or ./main.py".format(command))
+
+    if parameters['compare']:
+        if parameters['train']:
+            assert False
+        if len(parameters['compare_method']) == 0:
+            assert False
+
 
     if parameters['prefix'] == "":
         parameters['prefix'] = os.getcwd() + "/save/t-drive" \

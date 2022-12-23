@@ -1,4 +1,6 @@
 # from sensor_model import Sensor
+import random
+
 from cell_model import Cell
 from worker_model import WorkerBase, UAV, Worker, MobilePolicy
 from global_parameter import Global as g
@@ -13,22 +15,24 @@ from energy_model import Energy
 class Compare:
     def __init__(self,
                  x_limit,
-                 y_limit):
+                 y_limit,
+                 method):
         self.x_limit = x_limit
         self.y_limit = y_limit
+        self.method = method
         self.actions = [[0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 0], [0, 0]]
         self.cell_visited = np.zeros(shape=(self.x_limit, self.y_limit))
 
-    def run(self, method, prev_state: State):
+    def run(self, prev_state: State):
         [cx, cy] = prev_state.position
         energy_left = prev_state.energy
         energy_consume = Energy.move_energy_cost()
         obv_aoi = prev_state.observation_aoi_state
-        if method == "RR":
+        if self.method == "RR":
             return self.RoundRobin(cx, cy, energy_left, energy_consume)
-        elif method == "Greedy":
+        elif self.method == "Greedy":
             return self.Greedy(cx, cy, obv_aoi, energy_left, energy_consume)
-        elif method == "CCPP":
+        elif self.method == "CCPP":
             return self.CCPP(cx, cy, obv_aoi, energy_left, energy_consume)
         else:
             assert False
@@ -50,6 +54,8 @@ class Compare:
                 return 2
         else:
             if cx == 1:
+                if cy == self.y_limit - 1:
+                    return 5
                 return 4
             else:
                 return 5
@@ -57,7 +63,8 @@ class Compare:
     def Greedy(self, cx, cy, obv_aoi, energy_left, energy_consume):
         if energy_left - energy_consume < 0:
             return 6
-
+        if random.random() < 0.05:
+            return random.randint(0, 5)
         max_aoi = 0
         index = -1
         for idx, act in enumerate(self.actions):
@@ -73,7 +80,7 @@ class Compare:
         actions = np.array([(0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 0)])
         cur_pos = [cx, cy]
         path = np.empty(shape=(self.x_limit, self.y_limit), dtype=object)
-        path[tuple(cur_pos)] = np.array([])  #之前的代码是直接使用位置来写的，这里我觉得可以改成使用动作
+        path[tuple(cur_pos)] = np.array([], dtype=int)  #之前的代码是直接使用位置来写的，这里我觉得可以改成使用动作
         path_AoI = np.zeros(shape=(self.x_limit, self.y_limit))
         cover_state = np.zeros(shape=(self.x_limit, self.y_limit))
         cover_state[tuple(cur_pos)] = 1
@@ -123,7 +130,7 @@ class Environment:
     def __init__(self,
                  train: bool,
                  continue_train: bool,
-                 compare:bool,
+                 compare: bool,
                  compare_method: str,
                  sensor_number: int,
                  worker_number: int,
@@ -134,6 +141,11 @@ class Environment:
                  learn_rate: float,
                  gamma: float,
                  detail: bool,
+                 seed: int,
+                 mali_rate: float,
+                 win_len: int,
+                 pho: float,
+                 random_task_assignment: bool,
                  cleaner: DataCleaner
                  ):
 
@@ -144,15 +156,17 @@ class Environment:
         # self.__initial_trust = g.initial_trust
 
         self.__train = train  # 训练模式
+        self.__compare = compare
+        self.__compare_method = compare_method
         # self.__continue_train = continue_train  # 续训模式
 
+        self.random_task_assignment = random_task_assignment
         # self.__sensor_number = sensor_number
         # self.__worker_number = worker_number
 
         self.cleaner = cleaner
-
+        self.compare_act = Compare(cleaner.x_limit, cleaner.y_limit, compare_method)
         self.__detail = detail
-
         # 训练相关
         self.__max_episode = max_episode if train else 1
         self.__episode = 0
@@ -171,6 +185,7 @@ class Environment:
         self.__episode_energy = []
         self.__episode_reward = []
 
+        self.__slot_real_aoi = np.empty(shape=(cleaner.slot_number, cleaner.x_limit, cleaner.y_limit))
         # energy
         Energy.init(cleaner)
 
@@ -187,7 +202,13 @@ class Environment:
                                                            sensor_number)
         WorkerBase.set_cleaner(cleaner)
         self.__uav = UAV(cleaner.cell_limit)
-        self.__worker = [Worker(i, cleaner.worker_position[i]) for i in range(worker_number)]
+        np.random.seed(seed)
+        self.malicious = np.random.random(size=(10357,)) < mali_rate
+
+        self.__worker = [Worker(i, cleaner.worker_position[i],
+                                malicious=self.malicious[i], direct_window=win_len, recom_window=win_len*2,
+                                pho=pho)
+                         for i in range(worker_number)]
 
         # sensor_x, sensor_y = Sensor.get_all_locations()
         # Persistent.save_network_model(g.cell_length, self.__cell_limit, np.stack([sensor_x, sensor_y]))
@@ -257,8 +278,15 @@ class Environment:
         # uav步进
         Logger.log("\r\n" + "-" * 36 + " UAV step. " + "-" * 36)
         prev_state = self.get_current_network_state()
+
+        if not self.__train:
+            self.__slot_real_aoi[self.__current_slot-1] = prev_state.real_aoi_state
         # 根据上述状态，利用神经网络寻找最佳动作
-        uav_action_index, action_values = self.__agent.act(prev_state)
+        if not self.__compare:
+            uav_action_index, action_values = self.__agent.act(prev_state)
+        else:
+            uav_action_index = self.compare_act.run(prev_state)
+            action_values = []
         # 将index转换为二维方向dx_dy
         uav_action = MobilePolicy.get_action(uav_action_index)
         # 无人机移动，主要是动作改变和充电的工作
@@ -281,9 +309,15 @@ class Environment:
         return prev_state, uav_action_index, action_values, next_state
 
     def cell_step(self, cell_pos_to_refresh: set):
+        [malicious, normal] = [0, 0]
         for x, y in cell_pos_to_refresh:
-            self.__cell[x, y].task_assignment(self.__current_slot)    # 任务分配
+            malicious_assignment, normal_assignment = self.__cell[x, y].task_assignment(self.__current_slot, self.random_task_assignment)    # 任务分配
+            malicious += malicious_assignment
+            normal += normal_assignment
             self.__cell[x, y].worker_visited(self.__current_slot)     # 任务执行
+
+        return malicious, normal
+
 
     def workers_step(self):
         # 确定小区内存在那些车辆，并交由这些小区自行处理(进行任务分配和执行)
@@ -371,7 +405,7 @@ class Environment:
     def slot_step(self):
         # 整合test和train的slot步进方法
         refresh_cells = self.workers_step()  # worker先行移动
-        self.cell_step(refresh_cells)        # 小区进行任务分配和执行
+        [malicious_assignment, normal_assignment] = self.cell_step(refresh_cells)        # 小区进行任务分配和执行
 
         done = False
 
@@ -391,7 +425,9 @@ class Environment:
         reward = self.reward_calculate(prev_state, next_state, hover, charge)
 
         Logger.log(self.uav_step_state_detail(prev_state, next_state, action, action_values,
-                                              reward, self.__agent.epsilon))
+                                                  reward, self.__agent.epsilon if self.__train else 0))
+
+
         if self.__train:
             self.__agent.memorize(prev_state, action, next_state, reward, done)
 
@@ -400,6 +436,15 @@ class Environment:
         self.__episode_energy.append(next_state.energy)
         self.__episode_reward.append(reward)
 
+        self.worker_trust_refresh()  # worker信任刷新
+
+        good_trust = []
+        bad_trust = []
+        for worker in self.__worker:
+            if worker.malicious:
+                bad_trust.append(worker.trust)
+            else:
+                good_trust.append(worker.trust)
         persist_data = {
             'episode': self.__episode,
             'slot': self.__current_slot,
@@ -414,11 +459,16 @@ class Environment:
             'reward': reward,
             'energy': next_state.energy,
             'energy left rate': next_state.energy_state.sum(),
-            'epsilon': self.__agent.epsilon
+            'epsilon': self.__agent.epsilon if self.__train else 0,
+            'norm': np.linalg.norm(x=prev_state.observation_aoi_state-prev_state.real_aoi_state, ord=2),
+            'good trust': np.average(good_trust),
+            'bad trust': np.average(bad_trust),
+            'malicious assignment': malicious_assignment,
+            'normal assignment': normal_assignment
         }
         Persistent.save_data(persist_data)
 
-        self.worker_trust_refresh()  # worker信任刷新
+
 
         if self.__train and self.__sum_slot % 100 == 0:
             self.__agent.update_target_model()
@@ -466,7 +516,18 @@ class Environment:
             self.__agent.save(Persistent.model_path())
 
     def start(self):
+
         np.set_printoptions(suppress=True, precision=3)
         for episode in range(Persistent.trained_episode() + 1, self.__max_episode + 1):
             self.__episode = episode
             self.episode_step()
+
+
+        # 用于绘制热图的data
+        # if not self.__train:
+        #     file_name = Persistent.data_directory() + "/slot_aoi"
+        #     if self.__compare:
+        #         file_name += ('_' + self.__compare_method)
+        #     file_name += '.npy'
+        #     np.save(file_name, np.average(self.__slot_real_aoi, axis=0))
+

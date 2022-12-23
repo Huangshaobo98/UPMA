@@ -73,7 +73,7 @@ class DataCleaner:
         # self.__io_worker = ThreadPoolExecutor(max_workers=self.__thread_number)
         self.check_unpack()
         self.__info_json = self.read_info_json()
-        self.__coordinate = self.read_coordinate()
+        # self.__coordinate = self.read_coordinate() 全加载进来对性能开销太大了，画图的时候再打开
         self.__cell_coordinate = self.read_cell_coordinate()
         self.__worker_position = self.read_worker_position()       # 读取已经存储好的info_json，如果没有，则创建，并导入信息
         self.__sensor_cell = self.read_sensor_cell()
@@ -218,7 +218,7 @@ class DataCleaner:
 
         plt.figure(figsize=(10, 8), dpi=450)
 
-        plt.scatter(self.__coordinate[:, 0], self.__coordinate[:, 1], c='gray', s=0.1)
+        plt.scatter(self.worker_coordinate()[:, 0], self.worker_coordinate()[:, 1], c='gray', s=0.1)
         plt.scatter(x, y)
         x_range = self.__info_json['x_range']
         y_range = self.__info_json['y_range']
@@ -377,8 +377,9 @@ class DataCleaner:
     def sensor_diff(self):
         return self.__sensor_diff
 
-    @property
     def worker_coordinate(self):
+        if self.__coordinate.shape[0] == 0:
+            self.__coordinate = self.read_coordinate()
         return self.__coordinate
 
     @property

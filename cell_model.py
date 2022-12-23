@@ -36,28 +36,29 @@ class Cell:
     def add_worker(self, worker):
         self.__workers_at_this_slot.append(worker)
 
-    def task_assignment(self, current_slot):
+    def task_assignment(self, current_slot, random_assignment: bool = False):
         # 任务分配
         # sensors = self.__sensors
-        sorted_sensor = sorted(self.__sensors,
-                               key=lambda sensor: sensor.get_observation_aoi(current_slot),
-                               reverse=True)
+        sorted_sensor =  self.__sensors if random_assignment \
+            else sorted(self.__sensors,key=lambda sensor: sensor.get_observation_aoi(current_slot), reverse=True)
         # sorted_time = [sensor.get_observation_aoi(current_slot) for sensor in sorted_sensor]
         sensor_cnt = len(sorted_sensor)
         if sensor_cnt == 0:
-            return
+            return 0, 0
 
         trust_index = np.zeros(shape=(sensor_cnt,), dtype=float)
 
         # worker = self.__workers_at_this_slot
         worker_cnt = len(self.__workers_at_this_slot)
 
-        sorted_workers = sorted(self.__workers_at_this_slot,
-                                key=lambda worker: worker.trust,
-                                reverse=True)
+        sorted_workers = self.__workers_at_this_slot if random_assignment \
+            else sorted(self.__workers_at_this_slot, key=lambda worker: worker.trust, reverse=True)
 
         # worker_trusts = [worker.trust for worker in sorted_workers]
         worker_vitality = [worker.vitality for worker in sorted_workers]
+
+        malicious_assignment = 0
+        normal_assignment = 0
 
         sensor_ptr = 0
         satisfied_cnt = 0
@@ -72,11 +73,17 @@ class Cell:
             sorted_sensor[sensor_ptr].add_worker(sorted_workers[worker_ptr])
             worker_vitality[worker_ptr] -= 1
             trust_index[sensor_ptr] += sorted_workers[worker_ptr].trust
+            if sorted_workers[worker_ptr].malicious:
+                malicious_assignment += 1
+            else:
+                normal_assignment += 1
             if trust_index[sensor_ptr] >= 1.0:
                 satisfied_cnt += 1
             sensor_ptr = (sensor_ptr + 1) % sensor_cnt
 
         self.__workers_at_this_slot.clear()
+
+        return malicious_assignment, normal_assignment
 
     def episode_clear(self):
         for sensor in self.__sensors:
@@ -113,21 +120,23 @@ class Cell:
         map_fig = plt.figure(figsize=(10, 8), dpi=300)
         ax = map_fig.add_subplot(111)
         np.random.seed(10)
-        sp = cleaner.worker_coordinate.shape[0]
-        sample_nodes = cleaner.worker_coordinate[np.random.choice(sp, int(sp/50), False), :]
-        work_p = ax.scatter(cleaner.worker_coordinate[:, 0], cleaner.worker_coordinate[:, 1], color='gray', marker='o', s=0.01, alpha=0.5)
+        sp = cleaner.worker_coordinate().shape[0]
+        sample_nodes = cleaner.worker_coordinate()[np.random.choice(sp, int(sp/50), False), :]
+        work_p = ax.scatter(cleaner.worker_coordinate()[:, 0], cleaner.worker_coordinate()[:, 1], color='gray', marker='o', s=0.01, alpha=0.5)
         for row in cells:
             for cell in row:
                 cell.plot_cell(ax)
 
-        sen_p = ax.scatter(sensor_x, sensor_y, color='red', marker='o', s=2)
-        uav_p = ax.scatter(cleaner.cell_coordinate[5,5][0], cleaner.cell_coordinate[5,5][1], color='blue', marker='o', s=25)
+        sen_p = ax.scatter(sensor_x, sensor_y, color='royalblue', marker='o', s=2)
+        uav_p = ax.scatter(cleaner.cell_coordinate[5,5][0], cleaner.cell_coordinate[5,5][1], color='r', marker='o', s=25)
         plt.xlim(cleaner.x_range[0], cleaner.x_range[1])
         plt.ylim(cleaner.y_range[0], cleaner.y_range[1])
         plt.xlabel("Longitude")
         plt.ylabel("Latitude")
         plt.legend((sen_p, uav_p), ("SNs", "UAV"), loc='lower right')
         plt.savefig("cell_sensors.tif")
+        plt.savefig("cell_sensors.jpg")
+        print('ok')
 
 
     def uav_visited(self, current_slot):
