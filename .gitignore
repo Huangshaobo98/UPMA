@@ -1,11 +1,12 @@
-venv/
-.idea/
-__pycache__/
-save/
-data/t-drive/
+/venv/
+/.idea/
+/__pycache__/
+/save/
+/data/t-drive/
 /data_cp/
 /save_cp/
 /figure/
+/save*
 *.zip
 *.jpg
 *.npy
@@ -13,5 +14,4 @@ data/t-drive/
 *.out
 *.fig
 *.tif
-/save*
 nohup*

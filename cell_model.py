@@ -128,14 +128,14 @@ class Cell:
                 cell.plot_cell(ax)
 
         sen_p = ax.scatter(sensor_x, sensor_y, color='royalblue', marker='o', s=2)
-        uav_p = ax.scatter(cleaner.cell_coordinate[5,5][0], cleaner.cell_coordinate[5,5][1], color='r', marker='o', s=25)
+        uav_p = ax.scatter(cleaner.cell_coordinate[5, 5][0], cleaner.cell_coordinate[5,5][1], color='r', marker='o', s=25)
         plt.xlim(cleaner.x_range[0], cleaner.x_range[1])
         plt.ylim(cleaner.y_range[0], cleaner.y_range[1])
         plt.xlabel("Longitude")
         plt.ylabel("Latitude")
         plt.legend((sen_p, uav_p), ("SNs", "UAV"), loc='lower right')
-        plt.savefig("cell_sensors.tif")
-        plt.savefig("cell_sensors.jpg")
+        plt.savefig("/figure/cell_sensors.tif")
+        plt.savefig("/figure/cell_sensors.jpg")
         print('ok')
 
 

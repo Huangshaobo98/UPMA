@@ -224,7 +224,7 @@ class DataCleaner:
         y_range = self.__info_json['y_range']
         plt.xlim(x_range[0], x_range[1])
         plt.ylim(y_range[0], y_range[1])
-        plt.savefig('./cell_fig.jpg')
+        plt.savefig('/figure/cell_fig.jpg')
 
 
     def nearest_cell(self, pos_x, pos_y):
