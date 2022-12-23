@@ -1,33 +1,21 @@
 # -*- coding: utf-8 -*-
 import random
-# import gym
 import numpy as np
 from collections import deque
-# from keras.models import Sequential
-
-from keras.layers.core.dense import Dense
-from keras.layers.core.lambda_layer import Lambda
-from keras.layers.reshaping.flatten import Flatten
-from keras.engine.input_layer import Input
-from keras.layers.regularization.dropout import Dropout
-from keras.layers.pooling.max_pooling2d import MaxPool2D
-from keras.optimizers.optimizer_v2.adam import Adam
-from keras.engine.training import Model
-import keras.backend as K
+from tensorflow.python.keras.layers import Dense, Flatten, Lambda, Input # Dropout, MaxPool2D
+from tensorflow.python.keras.optimizer_v2.adam import Adam
+from tensorflow.python.keras.engine.training import Model
+import tensorflow.python.keras.backend as K
 from typing import List
-# from time import time
 from global_parameter import Global as g
-# from keras.callbacks import TensorBoard
-# from keras.utils.vis_utils import plot_model
-
-# EPISODES = 5000
 
 
 class State:
-    cell_size = g.cell_limit
-    max_energy = g.uav_energy
+    x_limit = -1
+    y_limit = -1
     onehot_position = g.onehot_position
-    sensor_number = g.sensor_number
+    sensor_number = 0
+    # second_per_slot = g.sec_per_slot
 
     def __init__(self,
                  real_aoi: np.ndarray,
@@ -44,11 +32,10 @@ class State:
         self.__energy = energy
         self.__charge = charge
 
-    def __str__(self):
-        msg = "Position: {}, charge state: {}, energy left: {}.\r\nreal aoi:\r\n{}\r\nobservation aoi:\r\n{}"\
-            .format(self.position, self.charge,
-                    self.energy, str(self.real_aoi), str(self.observation_aoi))
-        return msg
+    @staticmethod
+    def init(sensor_number, cell_size):
+        State.sensor_number = sensor_number
+        [State.x_limit, State.y_limit] = cell_size
 
     @property
     def real_aoi(self) -> np.ndarray:
@@ -56,7 +43,11 @@ class State:
 
     @property
     def real_aoi_state(self) -> np.ndarray:
-        return self.real_aoi / State.sensor_number
+        return self.real_aoi / State.sensor_number #/ State.second_per_slot  #
+
+    @property
+    def average_real_aoi_state(self) -> float:
+        return np.average(self.real_aoi_state)
 
     @property
     def observation_aoi(self) -> np.ndarray:
@@ -64,7 +55,11 @@ class State:
 
     @property
     def observation_aoi_state(self) -> np.ndarray:
-        return self.__observation_aoi / State.sensor_number
+        return self.__observation_aoi / State.sensor_number  # / State.second_per_slot  #
+
+    @property
+    def average_observation_aoi_state(self) -> float:
+        return np.average(self.observation_aoi_state)
 
     @property
     def energy(self) -> float:
@@ -72,7 +67,7 @@ class State:
 
     @property
     def energy_state(self) -> np.ndarray:
-        return np.array([self.energy / State.max_energy], dtype=np.float64)
+        return np.array([self.energy / g.uav_energy], dtype=np.float64)
 
     @property
     def charge(self) -> bool:
@@ -80,7 +75,7 @@ class State:
 
     @property
     def charge_state(self) -> np.ndarray:
-        return np.array([1.0 if self.charge else 0.0])
+        return np.array([1.0 if self.charge else 0.0], dtype=np.float64)
 
     @property
     def position(self) -> List[int]:
@@ -93,30 +88,32 @@ class State:
     @staticmethod
     def transform(position_state: List[int]) -> np.ndarray:
         if State.onehot_position:
-            new_pos_state = np.zeros(shape=(2, State.cell_size), dtype=np.float64)
-            new_pos_state[0, position_state[0]] = 1
-            new_pos_state[1, position_state[1]] = 1
+            new_pos_state = np.zeros(shape=(2, max(State.x_limit, State.y_limit)), dtype=np.float64)
+            new_pos_state[0, position_state[0]] = 1.0
+            new_pos_state[1, position_state[1]] = 1.0
         else:
-            new_pos_state = np.zeros(shape=(State.cell_size, State.cell_size), dtype=np.float64)
-            new_pos_state[position_state[0]][position_state[1]] = 1
+            new_pos_state = np.zeros(shape=(State.x_limit, State.y_limit), dtype=np.float64)
+            new_pos_state[position_state[0]][position_state[1]] = 1.0
         return new_pos_state
 
+    @property
     def pack_observation(self) -> List[np.ndarray]:
         return [self.observation_aoi_state[np.newaxis, :, :], self.position_state[np.newaxis, :, :],
                 self.energy_state[np.newaxis, :], self.charge_state[np.newaxis, :]]
 
+    @property
     def pack_real(self) -> List[np.ndarray]:
         return [self.real_aoi_state[np.newaxis, :, :], self.position_state[np.newaxis, :, :],
                 self.energy_state[np.newaxis, :], self.charge_state[np.newaxis, :]]
 
 
 class DQNAgent:
-    def __init__(self, cell_size, action_size, gamma=0.9, epsilon=1, epsilon_decay=0.9999,
-                 epsilon_min=0.08, lr=0.0005, dueling=True, train=True, continue_train=False, model_path=""):
+    def __init__(self, cell_size, action_size, gamma=0.75, epsilon=1, epsilon_decay=0.99995,
+                 epsilon_min=0.0, lr=0.0005, dueling=True, train=True, continue_train=False, model_path=""):
         # 暂且设定的动作集合：'h': 六个方向的单元移动+一种什么都不做的悬浮，在特定小区的悬浮可以看做是进行了充电操作
-        self.cell_size = cell_size
+        [self.x_size, self.y_size] = cell_size
         self.action_size = action_size
-        self.memory = deque(maxlen=20000)  # 创建双端队列
+        self.memory = deque(maxlen=25000)  # 创建双端队列
         self.gamma = gamma  # discount rate
         self.epsilon = epsilon  # exploration rate
         self.epsilon_min = epsilon_min
@@ -126,7 +123,7 @@ class DQNAgent:
         self.model = self._build_model(dueling)
         self.target_model = self._build_model(dueling)  # 创建两个相同的网络模型
         self.train = train
-        if continue_train:
+        if continue_train or not train:
             self.load(model_path)
         self.update_target_model()
 
@@ -136,11 +133,11 @@ class DQNAgent:
 
     def _build_model(self, dueling):
         # Neural Net for Deep-Q learning Model
-        input_a = Input(shape=(self.cell_size, self.cell_size))  # 观测AoI状态
+        input_a = Input(shape=(self.x_size, self.y_size))  # 观测AoI状态
         if not self.pos_grid:
-            input_b = Input(shape=(2, self.cell_size))                    # 无人机坐标点
+            input_b = Input(shape=(2, max(self.x_size, self.y_size)))                    # 无人机坐标点
         else:
-            input_b = Input(shape=(self.cell_size, self.cell_size))
+            input_b = Input(shape=(self.x_size, self.y_size))
         input_c = Input(shape=(1,))      # 能量模型，一维数值
         input_d = Input(shape=(1,))      # 是否在充电1.0-true 0.0 false
 
@@ -164,7 +161,8 @@ class DQNAgent:
         combined = K.concatenate([x.output, y.output, z.output, q.output])
 
         # model.add(Dense(128, input_dim=self.state_size, activation='relu'))
-        o = Dense(256, activation='relu')(combined)
+        o = Dense(512, activation='relu')(combined)
+        o = Dense(256, activation='relu')(o)
         o = Dense(256, activation='relu')(o)
         o = Dense(64, activation='relu')(o)
         # o = Dense(64, activation='relu')(o)
@@ -190,17 +188,16 @@ class DQNAgent:
 
         # prev_pos_state = self.transform(prev_state.position_state)
         # next_pos_state = self.transform(next_state.position_state)
-
         self.memory.append((prev_state, action, next_state, reward, done))
 
     def act(self, state: State):
         if self.train and np.random.rand() <= self.epsilon:
-            return random.randrange(self.action_size)
+            return random.randrange(self.action_size), []
         if self.train:
-            act_values = self.model.predict(state.pack_real(), batch_size=1, verbose=0)
+            act_values = self.model.predict(state.pack_real, batch_size=1, verbose=0)
         else:
-            act_values = self.model.predict(state.pack_observation(), batch_size=1, verbose=0)
-        return np.argmax(act_values[0])  # returns action
+            act_values = self.model.predict(state.pack_observation, batch_size=1, verbose=0)
+        return np.argmax(act_values[0]), list(act_values[0])  # returns action
 
     @staticmethod
     def __batch_stack(minibatch):
@@ -219,12 +216,12 @@ class DQNAgent:
         dones = []
 
         for prev_state, action, next_state, reward, done in minibatch:
-            prev_real_aoi_states.append(prev_state.real_aoi)
+            prev_real_aoi_states.append(prev_state.real_aoi_state)
             prev_position_states.append(prev_state.position_state)
             prev_energies.append(prev_state.energy_state)
             prev_charge_states.append(prev_state.charge_state)
 
-            next_real_aoi_states.append(next_state.real_aoi)
+            next_real_aoi_states.append(next_state.real_aoi_state)
             next_position_states.append(next_state.position_state)
             next_energies.append(next_state.energy_state)
             next_charge_states.append(next_state.charge_state)
@@ -254,16 +251,15 @@ class DQNAgent:
     def replay(self, batch_size):
 
         minibatch = np.array(random.sample(self.memory, batch_size), dtype=object)
-
         prev_state_stack, next_state_stack, action_stack, reward_stack, done_stack = self.__batch_stack(minibatch)
 
         next_targets = self.model.predict(next_state_stack, batch_size=batch_size, verbose=0)
 
         targets = self.model.predict(prev_state_stack, batch_size=batch_size, verbose=0)
 
-        targets[range(batch_size), action_stack] = \
-            reward_stack + self.gamma * np.amax(next_targets, axis=1).reshape(reward_stack.shape)
+        targets[range(batch_size), action_stack] = reward_stack + self.gamma * np.amax(next_targets, axis=1)
         targets[done_stack, action_stack[done_stack]] = reward_stack[done_stack]  # 这里改了一下位置，done状态下的target等价于其reward
+
         self.model.fit(prev_state_stack, targets, epochs=1, batch_size=batch_size, verbose=0)
 
         if self.epsilon > self.epsilon_min:
