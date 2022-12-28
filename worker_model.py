@@ -112,7 +112,7 @@ class Worker(WorkerBase):
         self._work_position = positions
         # self._work_rate = work_rate
         self.malicious = malicious
-        self._honest = 1 if not malicious else 0    # ?
+        self._honest = 1.0 if not malicious else 0.0    # ?
         self._vitality = vitality   # 活性，指的是每个时隙最多采集多少个传感器节点
         self._direct_trust = self.initial_trust
         self._direct_trust_fresh = False
@@ -132,8 +132,11 @@ class Worker(WorkerBase):
         # self._success_cnt = 0
         # self._fail_cnt = 0
 
-    def episode_clear(self):
+    def episode_clear(self, malicious: bool):
         super(Worker, self).clear()
+
+        self.malicious = malicious
+        self._honest = 1.0 if not malicious else 0.0
         self._direct_trust = self.initial_trust
         self._direct_trust_fresh = False
         self._temp_direct_trust_success = 0
@@ -279,7 +282,7 @@ class UAV(WorkerBase):
     #         self._y = (self._y + dy) % WorkerBase.cell_limit
     #     return self._x, self._y
 
-    def act(self, dx_dy):
+    def act(self, dx_dy, cells):
         prev_location = self.position
         # 检测是否主动作出了悬浮操作，如果是，则检查是否悬浮在可充电区域上方，是则充电；如果配置了任意单元可充电，则不需要检查充电区域
         if dx_dy == [0, 0]:
@@ -291,7 +294,7 @@ class UAV(WorkerBase):
                      = [min(self.__x_limit - 1, max(0, self.__x + dx)),
                         min(self.__y_limit - 1, max(0, self.__y + dy))]
 
-        self.__energy_consumption(prev_location == new_location)
+        self.__energy_consumption(prev_location == new_location, cells[self.__x, self.__y].collection_consume)
 
     @property
     def energy(self) -> float:
@@ -306,9 +309,10 @@ class UAV(WorkerBase):
         self.__charge_state = True
         self.__energy = min(self.max_energy, self.__energy + Energy.charge_energy_one_slot())
 
-    def __energy_consumption(self, move: bool):
+    def __energy_consumption(self, move: bool, collection_consume):
         self.__charge_state = False
         self.__energy -= (Energy.move_energy_cost() if move else Energy.hover_energy_cost())
+        self.__energy -= collection_consume
 
     def clear(self):
         super(UAV, self).clear()            # 位置清除

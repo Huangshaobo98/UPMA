@@ -15,7 +15,7 @@ class Cell:
         self.__y_location = position[1]
         self.__sensors = []
         self.__length = side_length
-
+        self.__energy_consume = 0
         self.__workers_at_this_slot = []
 
         # self.__map_style = g.map_style
@@ -92,6 +92,9 @@ class Cell:
     def add_sensor(self, sensor):
         self.__sensors.append(sensor)
 
+    def add_collection_consume(self, sensor_collect_consume):
+        self.__energy_consume += sensor_collect_consume
+
     @property
     def position(self):
         return [self.__x_location, self.__y_location]
@@ -160,6 +163,10 @@ class Cell:
             ret += sensor.get_real_aoi(current_slot)
         return ret
 
+    @property
+    def collection_consume(self)->float:
+        return self.__energy_consume
+
     @staticmethod
     def uniform_generator_with_position(cleaner,
                                         sensor_number: int,
@@ -178,8 +185,8 @@ class Cell:
         # print("sensors_x" + str(sensor_x[:20]) + 'sensor_y' + str(sensor_y[:20]))
         # print("x_diff" + str(sensor_x_diff[:20]) + 'y_diff' + str(sensor_y_diff[:20]))
         for i in range(sensor_number):
+            ret_cell[sensor_cell[i, 0], sensor_cell[i, 1]].add_collection_consume(cleaner.energy_consume(sensor_diff[i,0], sensor_diff[i,1]))
             Sensor(i, sensor_diff[i,0], sensor_diff[i,1], ret_cell[sensor_cell[i,0], sensor_cell[i,1]])
-
         return ret_cell
 
 

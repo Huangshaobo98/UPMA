@@ -29,6 +29,7 @@ def command_parse(commands,
         'suffix': "",
         'pho': g.default_pho,
         'random_assignment': g.default_random_assignment,
+        'seed': 0,
     }
     for key, value in kwargs.items():
         parameters[key] = value

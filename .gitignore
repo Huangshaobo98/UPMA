@@ -5,6 +5,7 @@
 /data/t-drive/
 /data_cp/
 /save_cp/
+/data*
 /figure/
 /save*
 *.zip

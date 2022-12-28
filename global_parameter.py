@@ -46,7 +46,7 @@ class Global:
     default_epsilon_decay = 0.99995     # 探索率衰减
     default_detail_log = False
     default_compare = False
-    default_malicious = 0
+    default_malicious = 0.15
     default_windows_length = 10
     default_pho = 0.7
     default_random_assignment = False

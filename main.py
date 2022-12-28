@@ -11,10 +11,10 @@ import sys
 
 
 class Main:
-    def __init__(self, kwargs: dict = {'cleaner': DataCleaner()}):
+    def __init__(self, kwargs):
         tf.config.set_visible_devices(tf.config.list_physical_devices("CPU"))
         parameters = command_parse(sys.argv[1:], kwargs)
-        cleaner = kwargs['cleaner']
+        cleaner = kwargs.get('cleaner', DataCleaner())
         # self.analysis = parameters['analysis']
         Persistent.init(train=parameters['train'],
                         continue_train=parameters['continue_train'],
@@ -56,8 +56,7 @@ class Main:
 if __name__ == '__main__':
     # CCPP Greedy RR
     processor = Main({'learn_rate': 0.00005, 'gamma': 0.9,
-                      'sensor_number': 1000, 'train': False,
-                      'compare': True, 'compare_method': 'CCPP'})
+                      'sensor_number': 2000, 'train': True})
     processor.start()
     processor.end()
 

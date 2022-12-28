@@ -167,6 +167,8 @@ class Environment:
         self.cleaner = cleaner
         self.compare_act = Compare(cleaner.x_limit, cleaner.y_limit, compare_method)
         self.__detail = detail
+
+        self.mali_rate = mali_rate
         # 训练相关
         self.__max_episode = max_episode if train else 1
         self.__episode = 0
@@ -200,13 +202,14 @@ class Environment:
         # network model
         self.__cell = Cell.uniform_generator_with_position(cleaner,
                                                            sensor_number)
+
         WorkerBase.set_cleaner(cleaner)
         self.__uav = UAV(cleaner.cell_limit)
         np.random.seed(seed)
-        self.malicious = np.random.random(size=(10357,)) < mali_rate
+        malicious = np.random.random(size=(10357,)) < mali_rate
 
         self.__worker = [Worker(i, cleaner.worker_position[i],
-                                malicious=self.malicious[i], direct_window=win_len, recom_window=win_len*2,
+                                malicious=malicious[i], direct_window=win_len, recom_window=win_len*2,
                                 pho=pho)
                          for i in range(worker_number)]
 
@@ -268,7 +271,7 @@ class Environment:
     def reward_calculate(self, prev_state: State, next_state: State, hover: bool, charge: bool):
         # 因为这里是训练得到的reward，因此用real_aoi进行计算
         # 这里虽然无人机可能会花费几个slot来换电池，但是我们对于模型的预测仍然采用下一个时隙的结果进行预测
-        reward = - np.sum(next_state.real_aoi_state) \
+        reward = - np.sum(next_state.observation_aoi_state) \
                  + self.__no_power_punish * g.energy_reward_calculate(next_state.energy_state[0]) \
                  - self.__hover_punish * (hover and not charge)
 
@@ -290,7 +293,7 @@ class Environment:
         # 将index转换为二维方向dx_dy
         uav_action = MobilePolicy.get_action(uav_action_index)
         # 无人机移动，主要是动作改变和充电的工作
-        self.__uav.act(uav_action)
+        self.__uav.act(uav_action, self.__cell)
         # 无人机执行所在小区的数据收集/评估worker的信任等工作
         self.cell_update_by_uav()
 
@@ -483,8 +486,10 @@ class Environment:
         for row_cells in self.__cell:
             for cell in row_cells:
                 cell.episode_clear()
-        for work in self.__worker:
-            work.episode_clear()
+        np.random.seed(self.__episode)
+        malicious = np.random.random(size=(10357,)) < self.mali_rate
+        for idx, work in enumerate(self.__worker):
+            work.episode_clear(malicious[idx])
         self.__uav.clear()
         self.__episode_real_aoi.clear()
         self.__episode_observation_aoi.clear()

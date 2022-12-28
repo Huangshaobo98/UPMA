@@ -5,11 +5,11 @@ class Energy:
     # v = g.uav_speed  # 无人机速度
     W = 1.2  # 重量
     D = 1.29  # 空气密度
-    x = 0.221  # 长度
-    y = 0.0963  # 宽度
-    z = 0.0903  # 高度    https://www.dji.com/cn/mavic-3/specs
-    A = 0.4  # 前迎面积
-    Cd = 0.040  # 空气的动力阻力系数
+    x = 0.3475  # 长度
+    y = 0.283  # 宽度
+    z = 0.1077  # 高度    https://www.dji.com/cn/mavic-3/specs
+    A = 0.0406707  # 前迎面积
+    Cd = 0.0895  # 空气的动力阻力系数
     charge_power = 65  # 充电电压65w
     __move_energy_cost = -1
     __hover_energy_cost = -1

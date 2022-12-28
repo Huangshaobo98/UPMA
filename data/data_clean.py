@@ -6,6 +6,7 @@ from zipfile import ZipFile
 import numpy as np
 from threading import Lock, Thread
 import matplotlib.pyplot as plt
+import math
 from numpy import random
 
 class DataCleaner:
@@ -18,10 +19,25 @@ class DataCleaner:
                  x_range=[116.15, 116.64],
                  y_range=[39.72, 40.095],
                  uav_speed=15,
-                 sen_number=20000):
+                 sen_number=20000,
+                 prop_1 = 3,    # dB
+                 prop_2 = 23,   # dB
+                 Pt = 21,       # dBm
+                 N0 = -51,     # dBm
+                 Height = 50,
+                 Zeta = 11.95,
+                 Pi = 0.14,
+                 fc = 2e9,
+                 band_width = 4 * 1024 * 1024,
+                 msg_size = 1 * 1024 * 1024,
+                 Ptrans = 0.0126):
 
         current_work_path = os.path.split(os.path.realpath(__file__))[0]
         data_set_json_path = current_work_path + '/data_set.json'
+
+        sub_dir = current_work_path + '/data_x_' + str(x_limit) + '_y_' + str(y_limit)
+        if not os.path.exists(sub_dir):
+            os.makedirs(sub_dir)
 
         with open(data_set_json_path, 'r') as file:
             json_file = json.load(file)
@@ -33,27 +49,26 @@ class DataCleaner:
         self.__uav_speed = uav_speed
         self.__sensor_number = sen_number
 
+        self.__K0 = (4 * math.pi * fc / 299792458) ** (-Zeta)
+        self.__prob_los = lambda d : 1 / (1 + Zeta * math.exp(-Pi * (180 / math.pi / math.sin(Height / math.sqrt(Height**2 + d**2)) - Zeta)))
+        self.__prob_avg = lambda d : 1 / (10 ** prop_1) * self.__prob_los(d) + 1 / (10 ** prop_2) * (1 - self.__prob_los(d))
+        self.__Ki = lambda d : self.__prob_avg(d) * self.__K0 * d ** (-Zeta)
+        self.__SNR = Pt - N0 # dB
+        self.__bit_rate = lambda d : band_width * math.log2(1 + 10 ** self.__SNR * self.__Ki(d))
+        self.__energy_consume = lambda x, y : Ptrans * msg_size * 8 / self.__bit_rate(sqrt((x * DataCleaner.earth_radian_coefficient)**2 + (y * DataCleaner.earth_radian_coefficient)**2))
+        self.__msg_size = msg_size
         self.__file_number = json_file['number']
         self.__prefix = json_file['prefix']
         self.__suffix = json_file['suffix']
         self.__pack_path = current_work_path + '/' + json_file['name']
         self.__unpack_directory = self.__pack_path[:self.__pack_path.find('.')] + '/'
         self.__data_directory = self.__unpack_directory + json_file['data_directory'] + '/'
+
         self.__coordinate_directory = current_work_path + "/coordinate"
         self.__coordinate_path = self.__coordinate_directory + '.npy'
 
-        self.__info_json_path = current_work_path + '/' + json_file['name'][:json_file['name'].find('.')] + '.json'
-        self.__worker_position_directory = current_work_path + '/worker'
-        self.__worker_position_path = self.__worker_position_directory + '.npy'
+        self.__info_json_path = sub_dir + '/' + json_file['name'][:json_file['name'].find('.')] + '.json'
 
-        self.__cell_coordinate_directory = current_work_path + '/cell_coordinate'
-        self.__cell_coordinate_path = self.__cell_coordinate_directory + '.npy'
-
-        self.__sensor_cell_directory = current_work_path + '/sensor_cell_coordinate' + str(sen_number)
-        self.__sensor_cell_path = self.__cell_coordinate_path + '.npy'
-
-        self.__sensor_diff_directory = current_work_path + '/sensor_diff_coordinate' + str(sen_number)
-        self.__sensor_diff_path = self.__cell_coordinate_path + '.npy'
 
         self.__coordinate = np.empty(shape=(0, 2))
         self.__worker_position = np.empty(shape=(self.__file_number,), dtype=dict)
@@ -73,13 +88,31 @@ class DataCleaner:
         # self.__io_worker = ThreadPoolExecutor(max_workers=self.__thread_number)
         self.check_unpack()
         self.__info_json = self.read_info_json()
-        # self.__coordinate = self.read_coordinate() 全加载进来对性能开销太大了，画图的时候再打开
+        self.__worker_position_directory = sub_dir + '/worker_sec_' + str(self.second_per_slot)
+        self.__worker_position_path = self.__worker_position_directory + '.npy'
+
+        self.__cell_coordinate_directory = sub_dir + '/cell_coordinate'
+        self.__cell_coordinate_path = self.__cell_coordinate_directory + '.npy'
+
+        self.__sensor_cell_directory = sub_dir + '/sensor_cell_coordinate_sen_' + str(sen_number)
+        self.__sensor_cell_path = self.__sensor_cell_directory + '.npy'
+
+        self.__sensor_diff_directory = sub_dir + '/sensor_diff_coordinate_sen_' + str(sen_number)
+        self.__sensor_diff_path = self.__sensor_diff_directory + '.npy'
+
+        self.__coordinate = self.read_coordinate() # 全加载进来对性能开销太大了，画图的时候再打开
         self.__cell_coordinate = self.read_cell_coordinate()
         self.__worker_position = self.read_worker_position()       # 读取已经存储好的info_json，如果没有，则创建，并导入信息
         self.__sensor_cell = self.read_sensor_cell()
         self.__sensor_diff = self.read_sensor_diff()
 
         # self.plot_scatters()
+
+    def bit_rate(self, ground_distance: float):
+        return self.__bit_rate(ground_distance)
+
+    def energy_consume(self, xdiff:float, ydiff:float):
+        return self.__energy_consume(xdiff, ydiff)
 
     def check_unpack(self):
         if not os.path.exists(self.__unpack_directory):
@@ -96,8 +129,11 @@ class DataCleaner:
 
     # 为每个worker计算时隙、小区位置
     def read_worker_position(self):
+        print("Begin read worker coordinate")
         if os.path.exists(self.__worker_position_path):
+            print("Worker coordinate data found, load from {}".format(self.__worker_position_path))
             return np.load(self.__worker_position_path, allow_pickle=True)
+        print("Not found worker coordinate file, begin generate from dataset")
         info_json = self.read_info_json()
         tasks = [Thread(target=self.task_read_worker_position, args=(i, info_json))
                  for i in range(self.__thread_number)]
@@ -106,29 +142,37 @@ class DataCleaner:
         for task in tasks:
             task.join()
         np.save(self.__worker_position_directory, self.__worker_position)
-        print("worker saved")
+        print("Save worker coordinate at {}".format(self.__worker_position_path))
         return self.__worker_position
 
     def read_sensor_cell(self):
+        print("Begin read sensor cell")
         if os.path.exists(self.__sensor_cell_path):
+            print("Sensor cell data found, load from {}".format(self.__sensor_cell_path))
             return np.load(self.__sensor_cell_path, allow_pickle=True)
+        print("Not found sensor cell file, begin generate from dataset")
         random.seed(10)
         sensor_x = random.randint(0, self.x_limit, self.sensor_number)
         sensor_y = random.randint(0, self.y_limit, self.sensor_number)
 
         ret = np.stack([sensor_x, sensor_y]).T
         np.save(self.__sensor_cell_directory, ret)
+        print("Save sensor cell at {}".format(self.__sensor_cell_path))
         return ret
 
     def read_sensor_diff(self):
+        print("Begin read sensor diff")
         if os.path.exists(self.__sensor_diff_path):
+            print("Sensor diff data found, load from {}".format(self.__sensor_diff_path))
             return np.load(self.__sensor_diff_path, allow_pickle=True)
+        print("Not found sensor diff file, begin generate from dataset")
         random.seed(10)
         sensor_x_diff = random.uniform(-self.side_length * sqrt(3) / 2, self.side_length * sqrt(3) / 2, self.sensor_number)
         sensor_y_diff = np.array([random.uniform(abs(x_diff) / sqrt(3) - self.side_length,
                                                  - abs(x_diff) / sqrt(3) + self.side_length) for x_diff in sensor_x_diff])
         ret = np.stack([sensor_x_diff, sensor_y_diff]).T
         np.save(self.__sensor_diff_directory, ret)
+        print("Save sensor diff at {}".format(self.__sensor_diff_path))
         return ret
 
     def task_read_worker_position(self, ind, info_json):
@@ -200,7 +244,7 @@ class DataCleaner:
                 # position_info[slot] = [cell_x, cell_y]
             positions.append(position_info)
             self.__total_number += 1
-            print("work {} over, total {}, id {}".format(i, self.__total_number, ind))
+            print("work {} processed, total {} processed\n".format(i, self.__total_number, ind), end="")
         self.__lock.acquire()
         for i in range(ind * self.__read_number + 1, min((ind + 1) * self.__read_number, self.__file_number + 1)):
             self.__worker_position[i - 1] = positions[i - (ind * self.__read_number + 1)]
@@ -224,7 +268,7 @@ class DataCleaner:
         y_range = self.__info_json['y_range']
         plt.xlim(x_range[0], x_range[1])
         plt.ylim(y_range[0], y_range[1])
-        plt.savefig('/figure/cell_fig.jpg')
+        plt.savefig('cell_fig.jpg')
 
 
     def nearest_cell(self, pos_x, pos_y):
@@ -242,8 +286,11 @@ class DataCleaner:
         return idx
 
     def read_cell_coordinate(self):
+        print("Begin read cell coordinate")
         if os.path.exists(self.__cell_coordinate_path):
+            print("Cell coordinate data found, load from {}".format(self.__cell_coordinate_path))
             return np.load(self.__cell_coordinate_path, allow_pickle=True)
+        print("Not found cell coordinate file, begin generate from dataset")
         side_length = self.__info_json['side_length']
         x_span = side_length * sqrt(3)
         y_span = side_length * 3 / 2
@@ -254,6 +301,7 @@ class DataCleaner:
                                                          self.__y_range[0] + i * y_span])
 
         np.save(self.__cell_coordinate_directory, self.__cell_coordinate)
+        print("Save cell coordinate at {}".format(self.__cell_coordinate_path))
         return self.__cell_coordinate
 
     # 读取已经处理好的json信息
@@ -276,7 +324,9 @@ class DataCleaner:
         side_length = (self.__x_range[1] - self.__x_range[0]) / (self.__x_limit - 0.5) / sqrt(3)
 
         length_span_cell = side_length * DataCleaner.earth_radian_coefficient * sqrt(3)
-        second_per_slot = length_span_cell / self.__uav_speed
+        second_per_slot = max(length_span_cell / self.__uav_speed,
+                              self.__msg_size * self.__sensor_number / (self.x_limit * self.y_limit)
+                              / self.bit_rate(length_span_cell / sqrt(3)))
         x_span = side_length * sqrt(3)
         y_span = side_length * 3 / 2
         info_json = {
@@ -288,6 +338,7 @@ class DataCleaner:
             'x_limit': self.__x_limit,
             'y_limit': self.__y_limit,
             'uav_speed': self.__uav_speed,
+            'msg_size': self.__msg_size,
             'sensor_number': self.__sensor_number
         }
 
@@ -326,10 +377,13 @@ class DataCleaner:
         self.__lock.acquire()
         self.__coordinate = np.append(self.__coordinate, np.stack([x, y]).T, axis=0)
         self.__lock.release()
-
+ 
     def read_coordinate(self):
+        print("Begin read dataset coordinate")
         if os.path.exists(self.__coordinate_path):
+            print("Dataset coordinate data found, load from {}".format(self.__coordinate_path))
             return np.load(self.__coordinate_path, allow_pickle=True)
+        print("Not found dataset coordinate file, begin generate from dataset")
         tasks = [Thread(target=self.task_read_coordinate, args=(i,)) for i in range(self.__thread_number)]
         for task in tasks:
             task.start()
@@ -337,7 +391,7 @@ class DataCleaner:
             task.join()
 
         np.save(self.__coordinate_directory, self.__coordinate)
-
+        print("Save dataset coordinate at {}".format(self.__coordinate_path))
         return self.__coordinate
 
     @staticmethod
@@ -436,7 +490,13 @@ class DataCleaner:
     @property
     def uav_speed(self):
         return self.__info_json['uav_speed']
+
+    @property
+    def msg_size(self):
+        return self.__info_json['msg_size']
+
+
     
 if __name__ == "__main__":
     cleaner = DataCleaner()
-    cleaner.plot_scatters()
+    # cleaner.plot_scatters()
