@@ -35,7 +35,7 @@ class AoI:
         return success_list, fail_list
 
     def dummy_report(self, workers: List[Worker], current_slot):
-        max_trust = 0
+        fail_rate = 1.0
         for worker in workers:
-            max_trust = max(max_trust, worker.trust)
-        self.__last_dummy = max_trust * (current_slot - self.__last_dummy) + self.__last_dummy
+            fail_rate *= (1 - worker.trust)
+        self.__last_dummy = (1 - fail_rate) * (current_slot - self.__last_dummy) + self.__last_dummy

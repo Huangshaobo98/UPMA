@@ -2,7 +2,7 @@
 import random
 import numpy as np
 from collections import deque
-from tensorflow.python.keras.layers import Dense, Flatten, Lambda, Input # Dropout, MaxPool2D
+from tensorflow.python.keras.layers import Dense, Flatten, Lambda, Input, Dropout, MaxPool2D
 from tensorflow.python.keras.optimizer_v2.adam import Adam
 from tensorflow.python.keras.engine.training import Model
 import tensorflow.python.keras.backend as K
@@ -55,7 +55,7 @@ class State:
 
     @property
     def observation_aoi_state(self) -> np.ndarray:
-        return self.__observation_aoi / State.sensor_number  # / State.second_per_slot  #
+        return self.observation_aoi / State.sensor_number  # / State.second_per_slot  #
 
     @property
     def average_observation_aoi_state(self) -> float:
@@ -113,7 +113,7 @@ class DQNAgent:
         # 暂且设定的动作集合：'h': 六个方向的单元移动+一种什么都不做的悬浮，在特定小区的悬浮可以看做是进行了充电操作
         [self.x_size, self.y_size] = cell_size
         self.action_size = action_size
-        self.memory = deque(maxlen=25000)  # 创建双端队列
+        self.memory = deque(maxlen=30000)  # 创建双端队列
         self.gamma = gamma  # discount rate
         self.epsilon = epsilon  # exploration rate
         self.epsilon_min = epsilon_min
@@ -162,12 +162,17 @@ class DQNAgent:
 
         # model.add(Dense(128, input_dim=self.state_size, activation='relu'))
         o = Dense(512, activation='relu')(combined)
+        # o = Dropout(0.2)(o)
         o = Dense(256, activation='relu')(o)
+        # o = Dropout(0.2)(o)
         o = Dense(256, activation='relu')(o)
+        # o = Dropout(0.2)(o)
         o = Dense(64, activation='relu')(o)
+        # o = Dropout(0.2)(o)
         # o = Dense(64, activation='relu')(o)
         # o = Dense(128, activation='relu')(o)
         o = Dense(64, activation='relu')(o)
+        # o = Dropout(0.2)(o)
         if dueling:
             o = Dense(self.action_size + 1, activation='linear')(o)
             o = Lambda(lambda i: K.expand_dims(i[:, 0], -1) + i[:, 1:] - K.mean(i[:, 1:], keepdims=True),
@@ -190,10 +195,10 @@ class DQNAgent:
         # next_pos_state = self.transform(next_state.position_state)
         self.memory.append((prev_state, action, next_state, reward, done))
 
-    def act(self, state: State):
+    def act(self, state: State, train_by_real: bool):
         if self.train and np.random.rand() <= self.epsilon:
             return random.randrange(self.action_size), []
-        if self.train:
+        if self.train and train_by_real:
             act_values = self.model.predict(state.pack_real, batch_size=1, verbose=0)
         else:
             act_values = self.model.predict(state.pack_observation, batch_size=1, verbose=0)

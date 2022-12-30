@@ -2,7 +2,7 @@ import os
 import signal
 from main import Main
 from multiprocessing import Process
-from data_clean import DataCleaner
+from data.data_clean import DataCleaner
 
 workers = []
 cleaner = DataCleaner()
@@ -25,8 +25,8 @@ def learn_train_test():
     for i in (0.001, 0.0001, 0.0005, 0.00005, 0.00001, 0.000005):
         workers.append(Process(target=process, args=({'learn_rate': i, 'gamma': 0.95, 'train': True},)))
 
-    for i in (0.001, 0.0001, 0.0005, 0.00005, 0.00001, 0.000005):
-        workers.append(Process(target=process, args=({'learn_rate': i, 'gamma': 0.99, 'train': True},)))
+    # for i in (0.001, 0.0001, 0.0005, 0.00005, 0.00001, 0.000005):
+    #     workers.append(Process(target=process, args=({'learn_rate': i, 'gamma': 0.99, 'train': True},)))
     return workers
 
 def gamma_train_test():

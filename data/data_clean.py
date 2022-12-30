@@ -23,13 +23,13 @@ class DataCleaner:
                  prop_1 = 3,    # dB
                  prop_2 = 23,   # dB
                  Pt = 21,       # dBm
-                 N0 = -51,     # dBm
+                 N0 = -50,     # dBm
                  Height = 50,
                  Zeta = 11.95,
                  Pi = 0.14,
                  fc = 2e9,
                  band_width = 4 * 1024 * 1024,
-                 msg_size = 1 * 1024 * 1024,
+                 msg_size = 4 * 1024 * 1024,
                  Ptrans = 0.0126):
 
         current_work_path = os.path.split(os.path.realpath(__file__))[0]

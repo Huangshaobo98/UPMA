@@ -164,6 +164,7 @@ class Environment:
         # self.__sensor_number = sensor_number
         # self.__worker_number = worker_number
 
+        self.train_by_real = False
         self.cleaner = cleaner
         self.compare_act = Compare(cleaner.x_limit, cleaner.y_limit, compare_method)
         self.__detail = detail
@@ -271,7 +272,7 @@ class Environment:
     def reward_calculate(self, prev_state: State, next_state: State, hover: bool, charge: bool):
         # 因为这里是训练得到的reward，因此用real_aoi进行计算
         # 这里虽然无人机可能会花费几个slot来换电池，但是我们对于模型的预测仍然采用下一个时隙的结果进行预测
-        reward = - np.sum(next_state.observation_aoi_state) \
+        reward = - np.sum(next_state.real_aoi_state if self.train_by_real else next_state.observation_aoi_state) \
                  + self.__no_power_punish * g.energy_reward_calculate(next_state.energy_state[0]) \
                  - self.__hover_punish * (hover and not charge)
 
@@ -286,7 +287,7 @@ class Environment:
             self.__slot_real_aoi[self.__current_slot-1] = prev_state.real_aoi_state
         # 根据上述状态，利用神经网络寻找最佳动作
         if not self.__compare:
-            uav_action_index, action_values = self.__agent.act(prev_state)
+            uav_action_index, action_values = self.__agent.act(prev_state, self.train_by_real)
         else:
             uav_action_index = self.compare_act.run(prev_state)
             action_values = []
@@ -462,12 +463,12 @@ class Environment:
             'reward': reward,
             'energy': next_state.energy,
             'energy left rate': next_state.energy_state.sum(),
-            'epsilon': self.__agent.epsilon if self.__train else 0,
             'norm': np.linalg.norm(x=prev_state.observation_aoi_state-prev_state.real_aoi_state, ord=2),
             'good trust': np.average(good_trust),
             'bad trust': np.average(bad_trust),
             'malicious assignment': malicious_assignment,
-            'normal assignment': normal_assignment
+            'normal assignment': normal_assignment,
+            'epsilon': self.__agent.epsilon if self.__train else 0,
         }
         Persistent.save_data(persist_data)
 
@@ -513,7 +514,8 @@ class Environment:
             'average energy': np.average(self.__episode_energy),
             'average reward': np.average(self.__episode_reward),
             'begin slot': begin_slot,
-            'slot number': self.__current_slot
+            'slot number': self.__current_slot,
+            'epsilon': self.__agent.epsilon if self.__train else 0,
         }
         Persistent.save_episode_data(episode_data)
         self.episode_clear()

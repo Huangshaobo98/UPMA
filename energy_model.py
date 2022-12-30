@@ -3,7 +3,7 @@ from data.data_clean import DataCleaner
 
 class Energy:
     # v = g.uav_speed  # 无人机速度
-    W = 1.2  # 重量
+    W = 0.899  # 重量
     D = 1.29  # 空气密度
     x = 0.3475  # 长度
     y = 0.283  # 宽度
