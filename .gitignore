@@ -8,6 +8,7 @@
 /data*
 /figure/
 /save*
+/backup/
 *.zip
 *.jpg
 *.npy
@@ -16,3 +17,4 @@
 *.fig
 *.tif
 nohup*
+*test.py

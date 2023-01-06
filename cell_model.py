@@ -6,7 +6,7 @@ from math import sqrt
 from data.data_clean import DataCleaner
 import matplotlib.pyplot as plt
 from PIL import Image
-
+import heapq
 class Cell:
     def __init__(self, x, y, position, side_length):
         self.__x = x
@@ -35,6 +35,123 @@ class Cell:
 
     def add_worker(self, worker):
         self.__workers_at_this_slot.append(worker)
+
+    def task_assignment_by_greed(self, sensors_ref: list, workers_ref: list, current_slot: int, reduce_rate: float, random_flag: bool):
+        # 要求sensor和worker为浅拷贝
+
+        sensors = sensors_ref.copy()
+        sensor_len = len(sensors)
+
+        workers = workers_ref.copy()
+        if not random_flag:
+            workers.sort(key=lambda worker: worker.trust, reverse=True)
+        worker_len = len(workers)
+
+        fail_exception = [1.0 for _ in range(sensor_len)]
+        aoi = [sensor.get_observation_aoi(current_slot) for sensor in sensors]
+        sum_aoi = sum(aoi)
+
+        workload = [worker.vitality for worker in workers]
+        heap = []
+        kmn = set()
+        reduce_aoi = 0
+        assignable_worker_idx = 0
+
+        normal_assignment = 0
+        malicious_assignment = 0
+
+        for idx, sensor in enumerate(sensors):
+            heapq.heappush(heap, (- aoi[idx] * fail_exception[idx], idx))
+        while assignable_worker_idx < worker_len and reduce_aoi / sum_aoi <= reduce_rate:
+            if workload[assignable_worker_idx] == 0:
+                assignable_worker_idx += 1
+                continue
+            (neg_reduce_aoi, sensor_idx) = heapq.heappop(heap)   # 取出需要被急切优化的node
+            worker_idx = assignable_worker_idx
+            while worker_idx < worker_len and ((worker_idx, sensor_idx) in kmn) and workload[worker_idx] > 0:
+                worker_idx += 1     # 当前worker已经被分配了采集sensor_index的任务，继续找下一个worker
+            if worker_idx == worker_len:
+                continue            # 找不到可以分配任务的worker，放弃当前sensor的任务分配，找下一个合适的sensor
+            sensors[sensor_idx].add_worker(workers[worker_idx]) #找到了，则分配
+            kmn.add((worker_idx, sensor_idx))
+            workload[worker_idx] -= 1
+            old_reduce_aoi = aoi[sensor_idx] * (1 - fail_exception[sensor_idx])
+            fail_exception[sensor_idx] *= (1 - workers[worker_idx].trust)
+            new_neg_reduce_aoi = aoi[sensor_idx] * (1 - fail_exception[sensor_idx])
+            heapq.heappush(heap, (new_neg_reduce_aoi, sensor_idx))
+            benefit = new_neg_reduce_aoi - old_reduce_aoi
+            reduce_aoi = reduce_aoi + benefit
+            if workers[worker_idx].malicious:
+                malicious_assignment += benefit
+            else:
+                normal_assignment += benefit
+        return malicious_assignment, normal_assignment
+
+    def task_assignment_by_sort(self, sensors_ref: list, workers_ref: list, current_slot: int, random_assignment: bool):
+
+        sorted_sensors =  sensors_ref.copy()
+        sorted_workers = workers_ref.copy()
+
+        if random_assignment:
+            sorted_sensors.sort(key=lambda sensor: sensor.get_observation_aoi(current_slot), reverse=True)
+            sorted_workers.sort(key=lambda worker: worker.trust, reverse=True)
+
+        sensor_cnt = len(sorted_sensors)
+        if sensor_cnt == 0:
+            return 0, 0
+
+        trust_index = np.zeros(shape=(sensor_cnt,), dtype=float)
+        # worker = self.__workers_at_this_slot
+        worker_cnt = len(sorted_workers)
+
+        # worker_trusts = [worker.trust for worker in sorted_workers]
+        worker_vitality = [worker.vitality for worker in sorted_workers]
+
+        malicious_assignment = 0
+        normal_assignment = 0
+
+        sensor_ptr = 0
+        satisfied_cnt = 0
+        worker_ptr = 0
+        while satisfied_cnt < sensor_cnt and worker_ptr < worker_cnt:
+            if worker_vitality[worker_ptr] == 0:
+                worker_ptr += 1
+                continue
+            if trust_index[sensor_ptr] > 1.0:
+                sensor_ptr = (sensor_ptr + 1) % sensor_cnt
+                continue
+            sorted_sensors[sensor_ptr].add_worker(sorted_workers[worker_ptr])
+            worker_vitality[worker_ptr] -= 1
+            trust_index[sensor_ptr] += sorted_workers[worker_ptr].trust
+
+            benefit = sorted_workers[worker_ptr].get_observation_aoi(current_slot)
+            if sorted_workers[worker_ptr].malicious:
+                malicious_assignment += benefit
+            else:
+                normal_assignment += benefit
+
+            if trust_index[sensor_ptr] >= 1.0:
+                satisfied_cnt += 1
+            sensor_ptr = (sensor_ptr + 1) % sensor_cnt
+
+        # self.__workers_at_this_slot.clear()
+
+        return malicious_assignment, normal_assignment
+
+    def task_assignment_(self, current_slot, assignment_method='greedy', convergence_factor=0.875):
+        if assignment_method == 'sort':
+            malicious_assignment, normal_assignment = self.task_assignment_by_sort(self.sensors, self.workers,
+                                                                                   current_slot, False)
+        elif assignment_method == 'random':
+            malicious_assignment, normal_assignment = self.task_assignment_by_greed(self.sensors, self.workers,
+                                                                                    current_slot, convergence_factor, True)
+        elif assignment_method == 'greedy':
+            malicious_assignment, normal_assignment = self.task_assignment_by_greed(self.sensors, self.workers,
+                                                                                    current_slot, convergence_factor, False)
+        else:
+            assert False
+        self.__workers_at_this_slot.clear()
+        return malicious_assignment, normal_assignment
 
     def task_assignment(self, current_slot, random_assignment: bool = False):
         # 任务分配
@@ -102,6 +219,10 @@ class Cell:
     @property
     def sensors(self):
         return self.__sensors
+
+    @property
+    def workers(self):
+        return self.__workers_at_this_slot
 
     @property
     def sensor_number(self):

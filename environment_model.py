@@ -146,6 +146,7 @@ class Environment:
                  win_len: int,
                  pho: float,
                  random_task_assignment: bool,
+                 assignment_reduce_rate: float,
                  cleaner: DataCleaner
                  ):
 
@@ -170,6 +171,7 @@ class Environment:
         self.__detail = detail
 
         self.mali_rate = mali_rate
+        self.reduce_rate = assignment_reduce_rate
         # 训练相关
         self.__max_episode = max_episode if train else 1
         self.__episode = 0
@@ -214,6 +216,7 @@ class Environment:
                                 pho=pho)
                          for i in range(worker_number)]
 
+        cleaner.free_memory()
         # sensor_x, sensor_y = Sensor.get_all_locations()
         # Persistent.save_network_model(g.cell_length, self.__cell_limit, np.stack([sensor_x, sensor_y]))
 
@@ -315,7 +318,13 @@ class Environment:
     def cell_step(self, cell_pos_to_refresh: set):
         [malicious, normal] = [0, 0]
         for x, y in cell_pos_to_refresh:
-            malicious_assignment, normal_assignment = self.__cell[x, y].task_assignment(self.__current_slot, self.random_task_assignment)    # 任务分配
+            if [x, y] == self.get_position_state():
+                continue
+            if self.__train:
+                malicious_assignment, normal_assignment = self.__cell[x, y].task_assignment(self.__current_slot, self.random_task_assignment)    # 任务分配
+            else:
+                method = 'greedy' if not self.random_task_assignment else 'random'
+                malicious_assignment, normal_assignment = self.__cell[x, y].task_assignment_(self.__current_slot, method, self.reduce_rate)  #
             malicious += malicious_assignment
             normal += normal_assignment
             self.__cell[x, y].worker_visited(self.__current_slot)     # 任务执行
@@ -442,37 +451,36 @@ class Environment:
 
         self.worker_trust_refresh()  # worker信任刷新
 
-        good_trust = []
-        bad_trust = []
-        for worker in self.__worker:
-            if worker.malicious:
-                bad_trust.append(worker.trust)
-            else:
-                good_trust.append(worker.trust)
-        persist_data = {
-            'episode': self.__episode,
-            'slot': self.__current_slot,
-            'sum real aoi': np.sum(next_state.real_aoi),
-            'average real aoi': np.average(next_state.real_aoi),
-            'sum observation aoi': np.sum(next_state.observation_aoi),
-            'average observation aoi': np.average(next_state.observation_aoi),
-            'hover': hover,
-            'charge': self.get_charge_state(),
-            'uav position x': next_state.position[0],
-            'uav position y': next_state.position[1],
-            'reward': reward,
-            'energy': next_state.energy,
-            'energy left rate': next_state.energy_state.sum(),
-            'norm': np.linalg.norm(x=prev_state.observation_aoi_state-prev_state.real_aoi_state, ord=2),
-            'good trust': np.average(good_trust),
-            'bad trust': np.average(bad_trust),
-            'malicious assignment': malicious_assignment,
-            'normal assignment': normal_assignment,
-            'epsilon': self.__agent.epsilon if self.__train else 0,
-        }
-        Persistent.save_data(persist_data)
-
-
+        if not self.__train:
+            good_trust = []
+            bad_trust = []
+            for worker in self.__worker:
+                if worker.malicious:
+                    bad_trust.append(worker.trust)
+                else:
+                    good_trust.append(worker.trust)
+            persist_data = {
+                'episode': self.__episode,
+                'slot': self.__current_slot,
+                'sum real aoi': np.sum(next_state.real_aoi),
+                'average real aoi': np.average(next_state.real_aoi),
+                'sum observation aoi': np.sum(next_state.observation_aoi),
+                'average observation aoi': np.average(next_state.observation_aoi),
+                'hover': hover,
+                'charge': self.get_charge_state(),
+                'uav position x': next_state.position[0],
+                'uav position y': next_state.position[1],
+                'reward': reward,
+                'energy': next_state.energy,
+                'energy left rate': next_state.energy_state.sum(),
+                'norm': np.linalg.norm(x=prev_state.observation_aoi_state-prev_state.real_aoi_state, ord=2),
+                'good trust': np.average(good_trust),
+                'bad trust': np.average(bad_trust),
+                'malicious assignment': malicious_assignment,
+                'normal assignment': normal_assignment,
+                'epsilon': self.__agent.epsilon if self.__train else 0,
+            }
+            Persistent.save_data(persist_data)
 
         if self.__train and self.__sum_slot % 100 == 0:
             self.__agent.update_target_model()
@@ -522,10 +530,13 @@ class Environment:
         if self.__train:
             self.__agent.save(Persistent.model_path())
 
+        if self.__episode % 25 == 0:
+            self.__agent.save(Persistent.model_directory() + '/backup_{}.h5'.format(self.__episode))
+
     def start(self):
 
         np.set_printoptions(suppress=True, precision=3)
-        for episode in range(Persistent.trained_episode() + 1, self.__max_episode + 1):
+        for episode in range(Persistent.trained_episode() + 1, Persistent.trained_episode() + self.__max_episode + 1):
             self.__episode = episode
             self.episode_step()
 

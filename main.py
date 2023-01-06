@@ -44,6 +44,7 @@ class Main:
                                win_len=parameters['windows_length'],
                                pho=parameters['pho'],
                                random_task_assignment=parameters['random_assignment'],
+                               assignment_reduce_rate=parameters['reduce_rate'],
                                cleaner=cleaner)
 
     def start(self):
@@ -55,8 +56,8 @@ class Main:
 
 if __name__ == '__main__':
     # CCPP Greedy RR
-    processor = Main({'learn_rate': 0.00005, 'gamma': 0.99,
-                      'sensor_number': 5000, 'train': True})
+    processor = Main({'learn_rate': 0.00005, 'gamma': 0.9, 'sensor_number': 5000,
+                      'worker_number': 500, 'train': False, 'console_log': True})
     processor.start()
     processor.end()
 

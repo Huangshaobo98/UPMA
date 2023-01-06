@@ -80,21 +80,22 @@ class Persistent:
                     try:
                         final_train_episode_info = f.readlines()[-1].split(',')
                         Persistent.__trained_episode = int(final_train_episode_info[0])
+                        Persistent.__trained_epsilon = 0.5
                         Persistent.__episode_added_header = True
                     except ValueError:
                         Persistent.__episode_added_header = True
                     except IndexError:
                         Persistent.__episode_added_header = False
 
-                with open(Persistent.__data_path) as f:
-                    try:
-                        final_train_data_info = f.readlines()[-1].split(',')
-                        Persistent.__trained_epsilon = float(final_train_data_info[-1])
-                        Persistent.__added_header = True
-                    except ValueError:
-                        Persistent.__added_header = True
-                    except IndexError:
-                        Persistent.__added_header = False
+                # with open(Persistent.__data_path) as f:
+                #     try:
+                #         final_train_data_info = f.readlines()[-1].split(',')
+                #         Persistent.__trained_epsilon = float(final_train_data_info[-1])
+                #         Persistent.__added_header = True
+                #     except ValueError:
+                #         Persistent.__added_header = True
+                #     except IndexError:
+                #         Persistent.__added_header = False
 
         if not train and os.path.exists(Persistent.__data_path):
             os.remove(Persistent.__data_path)
@@ -186,3 +187,7 @@ class Persistent:
     @staticmethod
     def trained_epsilon():
         return Persistent.__trained_epsilon
+
+    @staticmethod
+    def model_directory():
+        return Persistent.__model_directory

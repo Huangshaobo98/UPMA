@@ -100,13 +100,23 @@ class DataCleaner:
         self.__sensor_diff_directory = sub_dir + '/sensor_diff_coordinate_sen_' + str(sen_number)
         self.__sensor_diff_path = self.__sensor_diff_directory + '.npy'
 
-        self.__coordinate = self.read_coordinate() # 全加载进来对性能开销太大了，画图的时候再打开
+        # self.__coordinate = self.read_coordinate() # 全加载进来对性能开销太大了，画图的时候再打开
         self.__cell_coordinate = self.read_cell_coordinate()
         self.__worker_position = self.read_worker_position()       # 读取已经存储好的info_json，如果没有，则创建，并导入信息
         self.__sensor_cell = self.read_sensor_cell()
         self.__sensor_diff = self.read_sensor_diff()
 
         # self.plot_scatters()
+
+    def set_worker_number(self, worker_number):
+        self.__worker_position = self.__worker_position[:worker_number+1]
+
+    def free_memory(self):
+        self.__coordinate = None
+        self.__worker_position = None
+        self.__cell_coordinate = None
+        self.__sensor_cell = None
+        self.__sensor_diff = None
 
     def bit_rate(self, ground_distance: float):
         return self.__bit_rate(ground_distance)

@@ -38,7 +38,7 @@ class Global:
     # default_cell_limit = 6          # 边界大小
     default_sensor_number = 5000     # 传感器数量
     default_worker_number = 500       # worker数量
-    default_max_episode = 750      # 最大训练episode
+    default_max_episode = 500      # 最大训练episode
     # default_max_slot = 3000         # 最大时隙
     default_batch_size = 256        # 批大小
     default_learn_rate = 0.0001     # 学习率
@@ -47,6 +47,7 @@ class Global:
     default_detail_log = False
     default_compare = False
     default_malicious = 0.15
+    default_assignment_aoi_reduce_rate = 0.875
     default_windows_length = 10
     default_pho = 0.7
     default_random_assignment = False
