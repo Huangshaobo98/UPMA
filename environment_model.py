@@ -1,5 +1,6 @@
 # from sensor_model import Sensor
 import random
+# import sys
 
 from cell_model import Cell
 from worker_model import WorkerBase, UAV, Worker, MobilePolicy
@@ -21,7 +22,7 @@ class Compare:
         self.y_limit = y_limit
         self.method = method
         self.actions = [[0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 0], [0, 0]]
-        self.cell_visited = np.zeros(shape=(self.x_limit, self.y_limit))
+        self.cell_visited = np.zeros(shape=(self.x_limit, self.y_limit), dtype=bool)
 
     def run(self, prev_state: State):
         [cx, cy] = prev_state.position
@@ -63,8 +64,8 @@ class Compare:
     def Greedy(self, cx, cy, obv_aoi, energy_left, energy_consume):
         if energy_left - energy_consume < 0:
             return 6
-        if random.random() < 0.05:
-            return random.randint(0, 5)
+        # if random.random() < 0.05:
+        #     return random.randint(0, 5)
         max_aoi = 0
         index = -1
         for idx, act in enumerate(self.actions):
@@ -94,8 +95,8 @@ class Compare:
                     temp_pos = action + cell
                     if 0 <= temp_pos[0] < self.x_limit and 0 <= temp_pos[1] < self.y_limit \
                             and cover_state[tuple(temp_pos)] == 0:
-                        if path_AoI[tuple(temp_pos)] < path_AoI[tuple(cell)] + obv_aoi[tuple(temp_pos)]:
-                            path_AoI[tuple(temp_pos)] = path_AoI[tuple(cell)] + obv_aoi[tuple(temp_pos)]
+                        if path_AoI[tuple(temp_pos)] < path_AoI[tuple(cell)] + obv_aoi[tuple(temp_pos)] + 1:
+                            path_AoI[tuple(temp_pos)] = path_AoI[tuple(cell)] + obv_aoi[tuple(temp_pos)] + 1
                             path[tuple(temp_pos)] = np.append(path[tuple(cell)], act_idx)
                             new_layer_cells = np.vstack((new_layer_cells, temp_pos))
             layer_cells = np.unique(new_layer_cells, axis=0)
@@ -109,9 +110,14 @@ class Compare:
         if energy_left - energy_consume < 0:
             return 6
         path, path_AoI, layers = self.get_path(cx, cy, obv_aoi)
+        self.cell_visited[cx, cy] = True
+        for i in range(self.x_limit):
+            for j in range(self.y_limit):
+                if obv_aoi[i, j] <= 0.00001:
+                    self.cell_visited[i, j] = True
         if self.cell_visited.all():
-            self.cell_visited = np.zeros(shape=(self.x_limit, self.y_limit))
-            self.cell_visited[cx, cy] = 1
+            self.cell_visited = np.zeros(shape=(self.x_limit, self.y_limit), dtype=bool)
+            self.cell_visited[cx, cy] = True
         max_val = 0
         max_path_act = np.empty(shape=(0, 2), dtype=np.int32)
         for layer in layers:
@@ -172,8 +178,9 @@ class Environment:
 
         self.mali_rate = mali_rate
         self.reduce_rate = assignment_reduce_rate
+        self.sensor_number = sensor_number
         # 训练相关
-        self.__max_episode = max_episode if train else 1
+        self.__max_episode = max_episode if train else g.default_test_episode
         self.__episode = 0
         self.__max_slot = cleaner.slot_number
         self.__current_slot = 0
@@ -190,7 +197,27 @@ class Environment:
         self.__episode_energy = []
         self.__episode_reward = []
 
-        self.__slot_real_aoi = np.empty(shape=(cleaner.slot_number, cleaner.x_limit, cleaner.y_limit))
+
+        if not self.__train:
+            self.__slot_real_aoi = np.zeros(shape=(cleaner.slot_number, cleaner.x_limit, cleaner.y_limit), dtype=np.float64)
+            self.__slot_obv_aoi = np.zeros(shape=(cleaner.slot_number, cleaner.x_limit, cleaner.y_limit), dtype=np.float64)
+            self.__episode_data = {
+                'real_aoi_by_slot': np.zeros(shape=(self.__max_episode, cleaner.x_limit, cleaner.y_limit), dtype=np.float64),
+                'obv_aoi_by_slot': np.zeros(shape=(self.__max_episode, cleaner.x_limit, cleaner.y_limit), dtype=np.float64),
+                'visit_time': np.zeros(shape=(self.__max_episode, cleaner.x_limit, cleaner.y_limit), dtype=np.int16),
+                'avg_real_aoi': np.zeros(shape=(self.__max_episode, self.__max_slot), dtype=np.float64),
+                'avg_obv_aoi': np.zeros(shape=(self.__max_episode, self.__max_slot), dtype=np.float64),
+                'norm': np.zeros(shape=(self.__max_episode, self.__max_slot), dtype=np.float64),
+                'bad_trust': np.zeros(shape=(self.__max_episode, self.__max_slot), dtype=np.float64),
+                'good_trust': np.zeros(shape=(self.__max_episode, self.__max_slot), dtype=np.float64),
+                'bad_task_number': np.zeros(shape=(self.__max_episode, self.__max_slot), dtype=np.float64),
+                'good_task_number': np.zeros(shape=(self.__max_episode, self.__max_slot), dtype=np.float64),
+                'bad_assignment': np.zeros(shape=(self.__max_episode, self.__max_slot), dtype=np.float64),
+                'good_assignment': np.zeros(shape=(self.__max_episode, self.__max_slot), dtype=np.float64),
+                'reward': np.zeros(shape=(self.__max_episode, self.__max_slot), dtype=np.float64),
+                'energy': np.zeros(shape=(self.__max_episode, self.__max_slot), dtype=np.float64),
+                'actual_slot': np.zeros(shape=(self.__max_episode,), dtype=np.int16),
+            }
         # energy
         Energy.init(cleaner)
 
@@ -286,8 +313,8 @@ class Environment:
         Logger.log("\r\n" + "-" * 36 + " UAV step. " + "-" * 36)
         prev_state = self.get_current_network_state()
 
-        if not self.__train:
-            self.__slot_real_aoi[self.__current_slot-1] = prev_state.real_aoi_state
+        # if not self.__train:
+        #     self.__slot_real_aoi[self.__current_slot-1] = prev_state.real_aoi_state
         # 根据上述状态，利用神经网络寻找最佳动作
         if not self.__compare:
             uav_action_index, action_values = self.__agent.act(prev_state, self.train_by_real)
@@ -316,20 +343,22 @@ class Environment:
         return prev_state, uav_action_index, action_values, next_state
 
     def cell_step(self, cell_pos_to_refresh: set):
-        [malicious, normal] = [0, 0]
+        [malicious_number, normal_number, malicious_aoi, normal_aoi] = [0, 0, 0, 0]
         for x, y in cell_pos_to_refresh:
             if [x, y] == self.get_position_state():
                 continue
-            if self.__train:
-                malicious_assignment, normal_assignment = self.__cell[x, y].task_assignment(self.__current_slot, self.random_task_assignment)    # 任务分配
-            else:
-                method = 'greedy' if not self.random_task_assignment else 'random'
-                malicious_assignment, normal_assignment = self.__cell[x, y].task_assignment_(self.__current_slot, method, self.reduce_rate)  #
-            malicious += malicious_assignment
-            normal += normal_assignment
+            # if self.__train:
+            #     malicious_assignment, normal_assignment = self.__cell[x, y].task_assignment(self.__current_slot, self.random_task_assignment)    # 任务分配
+            # else:
+            method = 'greedy' if not self.random_task_assignment else 'random'
+            malicious_task_number, normal_task_number, malicious_assignment, normal_assignment = self.__cell[x, y].task_assignment_(self.__current_slot, method, self.reduce_rate)  #
+            malicious_number += malicious_task_number
+            normal_number += normal_task_number
+            malicious_aoi += malicious_assignment
+            normal_aoi += normal_assignment
             self.__cell[x, y].worker_visited(self.__current_slot)     # 任务执行
 
-        return malicious, normal
+        return malicious_number, normal_number, malicious_aoi, normal_aoi
 
 
     def workers_step(self):
@@ -418,7 +447,8 @@ class Environment:
     def slot_step(self):
         # 整合test和train的slot步进方法
         refresh_cells = self.workers_step()  # worker先行移动
-        [malicious_assignment, normal_assignment] = self.cell_step(refresh_cells)        # 小区进行任务分配和执行
+        [malicious_number, normal_number,
+         malicious_assignment, normal_assignment] = self.cell_step(refresh_cells)        # 小区进行任务分配和执行
 
         done = False
 
@@ -459,28 +489,46 @@ class Environment:
                     bad_trust.append(worker.trust)
                 else:
                     good_trust.append(worker.trust)
-            persist_data = {
-                'episode': self.__episode,
-                'slot': self.__current_slot,
-                'sum real aoi': np.sum(next_state.real_aoi),
-                'average real aoi': np.average(next_state.real_aoi),
-                'sum observation aoi': np.sum(next_state.observation_aoi),
-                'average observation aoi': np.average(next_state.observation_aoi),
-                'hover': hover,
-                'charge': self.get_charge_state(),
-                'uav position x': next_state.position[0],
-                'uav position y': next_state.position[1],
-                'reward': reward,
-                'energy': next_state.energy,
-                'energy left rate': next_state.energy_state.sum(),
-                'norm': np.linalg.norm(x=prev_state.observation_aoi_state-prev_state.real_aoi_state, ord=2),
-                'good trust': np.average(good_trust),
-                'bad trust': np.average(bad_trust),
-                'malicious assignment': malicious_assignment,
-                'normal assignment': normal_assignment,
-                'epsilon': self.__agent.epsilon if self.__train else 0,
-            }
-            Persistent.save_data(persist_data)
+            # persist_data = {
+            #     'episode': self.__episode,
+            #     'slot': self.__current_slot,
+            #     'sum real aoi': np.sum(next_state.real_aoi),
+            #     'average real aoi': np.average(next_state.real_aoi),
+            #     'sum observation aoi': np.sum(next_state.observation_aoi),
+            #     'average observation aoi': np.average(next_state.observation_aoi),
+            #     'hover': hover,
+            #     'charge': self.get_charge_state(),
+            #     'uav position x': next_state.position[0],
+            #     'uav position y': next_state.position[1],
+            #     'reward': reward,
+            #     'energy': next_state.energy,
+            #     'energy left rate': next_state.energy_state.sum(),
+            #     'norm': np.linalg.norm(x=prev_state.observation_aoi_state-prev_state.real_aoi_state, ord=2),
+            #     'good trust': np.average(good_trust),
+            #     'bad trust': np.average(bad_trust),
+            #     'malicious assignment': malicious_assignment,
+            #     'normal assignment': normal_assignment,
+            #     'epsilon': self.__agent.epsilon if self.__train else 0,
+            # }
+            self.__slot_real_aoi[self.__current_slot - 1] = prev_state.real_aoi_state
+            self.__slot_obv_aoi[self.__current_slot - 1] = prev_state.observation_aoi_state
+            self.__episode_data['visit_time'][self.__episode - 1, next_state.position[0], next_state.position[1]] += 1
+            self.__episode_data['avg_real_aoi'][self.__episode - 1, self.__current_slot - 1] = \
+                np.sum(prev_state.real_aoi) / self.sensor_number
+            self.__episode_data['avg_obv_aoi'][self.__episode - 1, self.__current_slot - 1] = \
+                np.sum(prev_state.observation_aoi) / self.sensor_number
+            self.__episode_data['norm'][self.__episode - 1, self.__current_slot - 1] = \
+                np.linalg.norm(x=prev_state.observation_aoi_state - prev_state.real_aoi_state, ord=2)
+            self.__episode_data['bad_trust'][self.__episode - 1, self.__current_slot - 1] = np.average(bad_trust)
+            self.__episode_data['good_trust'][self.__episode - 1, self.__current_slot - 1] = np.average(good_trust)
+            self.__episode_data['bad_assignment'][self.__episode - 1, self.__current_slot - 1] = malicious_assignment
+            self.__episode_data['good_assignment'][self.__episode - 1, self.__current_slot - 1] = normal_assignment
+            self.__episode_data['bad_task_number'][self.__episode - 1, self.__current_slot - 1] = malicious_number
+            self.__episode_data['good_task_number'][self.__episode - 1, self.__current_slot - 1] = normal_number
+            self.__episode_data['reward'][self.__episode - 1, self.__current_slot - 1] = reward
+            self.__episode_data['energy'][self.__episode - 1, self.__current_slot - 1] = prev_state.energy
+            self.__episode_data['actual_slot'][self.__episode - 1] = self.__current_slot
+            # Persistent.save_data(persist_data)
 
         if self.__train and self.__sum_slot % 100 == 0:
             self.__agent.update_target_model()
@@ -489,6 +537,26 @@ class Environment:
             self.__agent.replay(self.__batch_size)
 
         return done
+
+    def save_train_episode_data_to_npz(self):
+        if not self.__train:
+            save_path = Persistent.npz_path()
+            np.savez(save_path,
+                     real_aoi_by_slot=self.__episode_data['real_aoi_by_slot'],
+                     obv_aoi_by_slot=self.__episode_data['obv_aoi_by_slot'],
+                     visit_time=self.__episode_data['visit_time'],
+                     avg_real_aoi=self.__episode_data['avg_real_aoi'],
+                     avg_obv_aoi=self.__episode_data['avg_obv_aoi'],
+                     norm=self.__episode_data['norm'],
+                     bad_trust=self.__episode_data['bad_trust'],
+                     good_trust=self.__episode_data['good_trust'],
+                     bad_assignment=self.__episode_data['bad_assignment'],
+                     good_assignment=self.__episode_data['good_assignment'],
+                     bad_task_number=self.__episode_data['bad_task_number'],
+                     good_task_number=self.__episode_data['good_task_number'],
+                     reward=self.__episode_data['reward'],
+                     energy=self.__episode_data['energy'],
+                     actual_slot=self.__episode_data['actual_slot'])
 
     def episode_clear(self):
         # 刷新状态，重新开始
@@ -504,6 +572,8 @@ class Environment:
         self.__episode_observation_aoi.clear()
         self.__episode_energy.clear()
         self.__episode_reward.clear()
+        self.__slot_real_aoi = np.zeros(shape=(self.cleaner.slot_number, self.cleaner.x_limit, self.cleaner.y_limit), dtype=np.float64)
+        self.__slot_obv_aoi = np.zeros(shape=(self.cleaner.slot_number, self.cleaner.x_limit, self.cleaner.y_limit), dtype=np.float64)
 
     def episode_step(self):
         begin_slot = self.__sum_slot
@@ -526,12 +596,14 @@ class Environment:
             'epsilon': self.__agent.epsilon if self.__train else 0,
         }
         Persistent.save_episode_data(episode_data)
+        if not self.__train:
+            self.__episode_data['real_aoi_by_slot'][self.__episode - 1] = np.average(self.__slot_real_aoi, axis=0)
+            self.__episode_data['obv_aoi_by_slot'][self.__episode - 1] = np.average(self.__slot_obv_aoi, axis=0)
         self.episode_clear()
         if self.__train:
             self.__agent.save(Persistent.model_path())
-
-        if self.__episode % 25 == 0:
-            self.__agent.save(Persistent.model_directory() + '/backup_{}.h5'.format(self.__episode))
+            if self.__episode % 25 == 0:
+                self.__agent.save(Persistent.model_directory() + '/backup_{}.h5'.format(self.__episode))
 
     def start(self):
 
@@ -539,7 +611,7 @@ class Environment:
         for episode in range(Persistent.trained_episode() + 1, Persistent.trained_episode() + self.__max_episode + 1):
             self.__episode = episode
             self.episode_step()
-
+        self.save_train_episode_data_to_npz()
 
         # 用于绘制热图的data
         # if not self.__train:

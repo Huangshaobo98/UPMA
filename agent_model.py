@@ -47,7 +47,7 @@ class State:
 
     @property
     def average_real_aoi_state(self) -> float:
-        return np.average(self.real_aoi_state)
+        return np.sum(self.real_aoi_state) / State.sensor_number
 
     @property
     def observation_aoi(self) -> np.ndarray:
@@ -59,7 +59,7 @@ class State:
 
     @property
     def average_observation_aoi_state(self) -> float:
-        return np.average(self.observation_aoi_state)
+        return np.sum(self.observation_aoi_state) / State.sensor_number
 
     @property
     def energy(self) -> float:

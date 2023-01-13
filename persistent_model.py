@@ -15,15 +15,16 @@ class Persistent:
     __model_path = None
     __data_path = None
     __episode_data_path = None
+    __npz_path = None
 
-    __network_model_directory = None
-    __network_model_path = None
+    # __network_model_directory = None
+    # __network_model_path = None
 
     __file_handle = None  # 文件句柄，用于记录运行时状态
     __file_writer = None  # csv_writer
     __added_header = None  # 续训时应该已经创建好了header
     __episode_added_header = None
-
+    __slot_log_save = False
     __trained_episode = 0
     __trained_epsilon = 1.0
 
@@ -33,7 +34,8 @@ class Persistent:
              compare: bool,
              compare_method: str = "",
              directory="",
-             suffix=""):
+             suffix="",
+             slot_log_save=False):
 
         if not directory == "":
             Persistent.__persistent_directory = directory
@@ -45,18 +47,23 @@ class Persistent:
         Persistent.__episode_added_header = continue_train
 
         Persistent.__model_directory = Persistent.__persistent_directory + "/model"
-        if compare:
-            Persistent.__data_directory = Persistent.__persistent_directory + "/compare"
-            Persistent.__data_path = Persistent.__data_directory + "/" + str(compare_method) + suffix + ".csv"
-        else:
-            Persistent.__data_directory = Persistent.__persistent_directory + ("/train" if train else "/test")
-            Persistent.__data_path = Persistent.__data_directory + ("/running.csv" if train else
-                                                                    "/Test" + suffix + ".csv")
+        Persistent.__data_directory = Persistent.__persistent_directory + ("/compare" if compare else ("/train" if train else "/test"))
+        Persistent.__data_path = Persistent.__data_directory + ("/{}{}.csv".format(compare_method, suffix) if compare
+                                                                else ("/running{}.csv".format(suffix) if train else "/Test{}.csv".format(suffix)))
+        Persistent.__npz_path = Persistent.__data_directory + ('/{}{}.npz'.format(compare_method, suffix) if compare
+                                                               else ("/running{}.npz".format(suffix) if train else "/Test{}.npz".format(suffix)))
+        # if compare:
+        #     Persistent.__data_path = Persistent.__data_directory + "/{}{}.csv".format(compare_method, suffix)
+        # else:
+        #     Persistent.__data_path = Persistent.__data_directory +
 
-        Persistent.__network_model_directory = Persistent.__data_directory + "/network_model"
+        # Persistent.__network_model_directory = Persistent.__data_directory + "/network_model"
         Persistent.__model_path = Persistent.__model_directory + "/model.h5"
-        Persistent.__episode_data_path = Persistent.__data_directory + "/episode.csv"
-        Persistent.__network_model_path = Persistent.__data_directory + ".npz"
+        Persistent.__episode_data_path = Persistent.__data_directory + "/{}episode{}.csv"\
+            .format(((compare_method + '_') if compare else ""), suffix)
+        # if compare:
+        #     Persistent.__episode_data_path = Persistent.__data_directory + "/{}_episode.csv".format(compare_method)
+        # Persistent.__network_model_path = Persistent.__data_directory + ".npz"
 
         if not os.path.exists(Persistent.__model_directory):
             os.makedirs(Persistent.__model_directory)
@@ -86,7 +93,11 @@ class Persistent:
                         Persistent.__episode_added_header = True
                     except IndexError:
                         Persistent.__episode_added_header = False
-
+        else:
+            if os.path.exists(Persistent.__data_path):
+                os.remove(Persistent.__data_path)
+            if os.path.exists(Persistent.__episode_data_path):
+                os.remove(Persistent.__episode_data_path)
                 # with open(Persistent.__data_path) as f:
                 #     try:
                 #         final_train_data_info = f.readlines()[-1].split(',')
@@ -97,13 +108,14 @@ class Persistent:
                 #     except IndexError:
                 #         Persistent.__added_header = False
 
-        if not train and os.path.exists(Persistent.__data_path):
-            os.remove(Persistent.__data_path)
-        Persistent.__file_handle = open(Persistent.__data_path, 'a+')   # 追加模式，方便后面存储数据
-        assert Persistent.__file_handle is not None
+        if slot_log_save:
+            if not train and os.path.exists(Persistent.__data_path):
+                os.remove(Persistent.__data_path)
+            Persistent.__file_handle = open(Persistent.__data_path, 'a+')   # 追加模式，方便后面存储数据
+            assert Persistent.__file_handle is not None
 
-        Persistent.__file_writer = csv.writer(Persistent.__file_handle)
-        assert Persistent.__file_writer is not None
+            Persistent.__file_writer = csv.writer(Persistent.__file_handle)
+            assert Persistent.__file_writer is not None
 
     @staticmethod
     def close():
@@ -132,6 +144,8 @@ class Persistent:
     # save a row data
     @staticmethod
     def save_data(datas):
+        if not Persistent.__slot_log_save:
+            return
         keys = []
         values = []
         for key, value in datas.items():
@@ -159,14 +173,18 @@ class Persistent:
                 Persistent.__episode_added_header = True
             csv_writer.writerow(values)
 
-    @staticmethod
-    def save_network_model(cell_length, cell_limit, sensor_position):
-        np.savez(Persistent.__network_model_directory, sensor_position=sensor_position)
+    # @staticmethod
+    # def save_network_model(cell_length, cell_limit, sensor_position):
+    #     np.savez(Persistent.__network_model_directory, sensor_position=sensor_position)
+
+    # @staticmethod
+    # def load_network_model():
+    #     file = np.load(Persistent.__network_model_path)
+    #     return file['sensor_position']
 
     @staticmethod
-    def load_network_model():
-        file = np.load(Persistent.__network_model_path)
-        return file['sensor_position']
+    def npz_path() -> str:
+        return Persistent.__npz_path
 
     @staticmethod
     def model_path() -> str:
@@ -191,3 +209,7 @@ class Persistent:
     @staticmethod
     def model_directory():
         return Persistent.__model_directory
+
+    @staticmethod
+    def episode_data_path():
+        return Persistent.__episode_data_path

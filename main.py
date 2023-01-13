@@ -56,8 +56,10 @@ class Main:
 
 if __name__ == '__main__':
     # CCPP Greedy RR
-    processor = Main({'learn_rate': 0.00005, 'gamma': 0.9, 'sensor_number': 5000,
-                      'worker_number': 500, 'train': False, 'console_log': True})
+    processor = Main({'sensor_number': 5000, 'worker_number': 5000,
+                      'gamma': 0.9, 'learn_rate': 5e-05, 'train': False,
+                      'reduce_rate': 0.75, 'suffix': '_reduce_0.75',
+                      'console_log': True})
     processor.start()
     processor.end()
 

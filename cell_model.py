@@ -57,12 +57,14 @@ class Cell:
         reduce_aoi = 0
         assignable_worker_idx = 0
 
+        normal_task_number = 0
+        malicious_task_number = 0
         normal_assignment = 0
         malicious_assignment = 0
 
         for idx, sensor in enumerate(sensors):
             heapq.heappush(heap, (- aoi[idx] * fail_exception[idx], idx))
-        while assignable_worker_idx < worker_len and reduce_aoi / sum_aoi <= reduce_rate:
+        while len(heap) > 0 and assignable_worker_idx < worker_len and reduce_aoi / sum_aoi <= reduce_rate:
             if workload[assignable_worker_idx] == 0:
                 assignable_worker_idx += 1
                 continue
@@ -83,9 +85,11 @@ class Cell:
             reduce_aoi = reduce_aoi + benefit
             if workers[worker_idx].malicious:
                 malicious_assignment += benefit
+                malicious_task_number += 1
             else:
                 normal_assignment += benefit
-        return malicious_assignment, normal_assignment
+                normal_task_number += 1
+        return malicious_task_number, normal_task_number, malicious_assignment, normal_assignment
 
     def task_assignment_by_sort(self, sensors_ref: list, workers_ref: list, current_slot: int, random_assignment: bool):
 
@@ -106,6 +110,9 @@ class Cell:
 
         # worker_trusts = [worker.trust for worker in sorted_workers]
         worker_vitality = [worker.vitality for worker in sorted_workers]
+
+        normal_task_number = 0
+        malicious_task_number = 0
 
         malicious_assignment = 0
         normal_assignment = 0
@@ -136,22 +143,22 @@ class Cell:
 
         # self.__workers_at_this_slot.clear()
 
-        return malicious_assignment, normal_assignment
+        return malicious_task_number, normal_task_number, malicious_assignment, normal_assignment
 
     def task_assignment_(self, current_slot, assignment_method='greedy', convergence_factor=0.875):
         if assignment_method == 'sort':
-            malicious_assignment, normal_assignment = self.task_assignment_by_sort(self.sensors, self.workers,
+            malicious_number, normal_number, malicious_assignment, normal_assignment = self.task_assignment_by_sort(self.sensors, self.workers,
                                                                                    current_slot, False)
         elif assignment_method == 'random':
-            malicious_assignment, normal_assignment = self.task_assignment_by_greed(self.sensors, self.workers,
+            malicious_number, normal_number, malicious_assignment, normal_assignment = self.task_assignment_by_greed(self.sensors, self.workers,
                                                                                     current_slot, convergence_factor, True)
         elif assignment_method == 'greedy':
-            malicious_assignment, normal_assignment = self.task_assignment_by_greed(self.sensors, self.workers,
+            malicious_number, normal_number, malicious_assignment, normal_assignment = self.task_assignment_by_greed(self.sensors, self.workers,
                                                                                     current_slot, convergence_factor, False)
         else:
             assert False
         self.__workers_at_this_slot.clear()
-        return malicious_assignment, normal_assignment
+        return malicious_number, normal_number, malicious_assignment, normal_assignment
 
     def task_assignment(self, current_slot, random_assignment: bool = False):
         # 任务分配

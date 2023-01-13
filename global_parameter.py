@@ -48,6 +48,7 @@ class Global:
     default_compare = False
     default_malicious = 0.15
     default_assignment_aoi_reduce_rate = 0.875
+    default_test_episode = 250
     default_windows_length = 10
     default_pho = 0.7
     default_random_assignment = False

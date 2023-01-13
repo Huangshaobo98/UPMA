@@ -15,8 +15,8 @@ def mean(data):
     return np.mean(data)
 
 def learn_rate_analysis():
-    learn_rate = [0.005, 0.001, 0.0005, 0.0001, 0.00005, 0.00001]
-    files = ["save/t-drive_sen_5000_wkr_50_epi_500_bat_256_lr_{}_gama_0.9_epd_0.99995/train/episode.csv"
+    learn_rate = [0.001, 0.0005, 0.0001, 0.00005, 0.00001, 0.00005]
+    files = ["save/t-drive_sen_5000_wkr_500_epi_500_bat_256_lr_{}_gama_0.9_epd_0.99999/train/episode.csv"
              .format(str(l)) for l in learn_rate]
 
     data = []
@@ -26,8 +26,8 @@ def learn_rate_analysis():
         data.append(t['average real aoi'].to_numpy() / 5000)
         unfinish.append(t['slot number'].to_numpy() == 1394)
 
-    gamma = [0.95, 0.9, 0.75]
-    files = ["save/t-drive_sen_5000_wkr_50_epi_500_bat_256_lr_5e-05_gama_{}_epd_0.99995/train/episode.csv"
+    gamma = [0.99, 0.95, 0.9, 0.75, 0.5, 0.3]
+    files = ["save/t-drive_sen_5000_wkr_500_epi_500_bat_256_lr_5e-05_gama_{}_epd_0.99999/train/episode.csv"
              .format(str(l)) for l in gamma]
 
     data_ = []
@@ -218,6 +218,8 @@ def mali_compare():
         random_assign.append(np.average(data_assign))
         random_norm.append(np.average(data_norm))
     return random_assign, random_norm, test_assign, test_norm
+
+
 
 if __name__ == '__main__':
     # [data, unfinish] = learn_rate_analysis()
