@@ -1,4 +1,5 @@
 # Age of Information (AoI) optimization by joint UAV and worker nodes based on deep reinforcement learning algorithm D3QN
+Note: A work for tentative manuscript title: A UAV-assisted Hybrid Optimization Frame-work for AoI Minimization
 ## Finished progress
 1. Network model
 2. D3QN adaptation
