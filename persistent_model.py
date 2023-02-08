@@ -71,6 +71,8 @@ class Persistent:
             os.makedirs(Persistent.__data_directory)
 
         if train:
+            with open(Persistent.__data_directory + '/start.txt', 'w') as f:
+                pass
             if not continue_train:                      # 非断点续训练，要干掉原有的训练日志，从0开始
                 if os.path.exists(Persistent.__model_path):
                     os.remove(Persistent.__model_path)

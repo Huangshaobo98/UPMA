@@ -111,9 +111,10 @@ class DataCleaner:
     def set_worker_number(self, worker_number):
         self.__worker_position = self.__worker_position[:worker_number+1]
 
-    def free_memory(self):
+    def free_memory(self, worker_number:int):
         self.__coordinate = None
-        self.__worker_position = None
+        if worker_number == 0:
+            self.__worker_position = None
         self.__cell_coordinate = None
         self.__sensor_cell = None
         self.__sensor_diff = None

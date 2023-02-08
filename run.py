@@ -25,8 +25,15 @@ def learn_train_test():
     #     workers.append(Process(target=process, args=({'learn_rate': i, 'gamma': 0.9},)))
     # for i in (0.001, 0.005, 0.0001, 0.0005, 0.00001, 0.00005):
     #     workers.append(Process(target=process, args=({'learn_rate': i, 'gamma': 0.95},)))
-    for i in (0.001, 0.0005, 0.0001, 0.00005, 0.00001, 0.000005):
-        workers.append(Process(target=process, args=({'learn_rate': i, 'gamma': 0.9, 'train': True},)))
+    for i in (0.005, 0.001, 0.0005, 0.0001, 0.00001, 0.000005):
+        data = {'gamma': 0.85,
+                'malicious': 0.2,
+                'pho': 0.5,
+                'learn_rate': i,
+                'train': True}
+        workers.append(Process(target=process,
+                               args=(data,),
+                               name=str(data)))
 
     # for i in (0.001, 0.0001, 0.0005, 0.00005, 0.00001, 0.000005):
     #     workers.append(Process(target=process, args=({'learn_rate': i, 'gamma': 0.99, 'train': True},)))
@@ -35,8 +42,45 @@ def learn_train_test():
 def gamma_train_test():
     print("gamma train")
     workers = []
-    for i in (0.99, 0.95, 0.75, 0.5, 0.3):
-        workers.append(Process(target=process, args=({'gamma': i, 'learn_rate': 0.00005, 'train': True},)))
+    for i in (0.99, 0.95, 0.9, 0.75, 0.5, 0.3):
+        data = {'gamma': i,
+                'malicious': 0.2,
+                'pho': 0.5,
+                'learn_rate': 0.00005,
+                'train': True}
+        workers.append(Process(target=process,
+                               args=(data,),
+                               name=str(data)))
+    return workers
+
+def batch_size_train_test():
+    print("batch_size train")
+    workers = []
+    for b in (32, 64, 128, 512, 1024):
+        data = {'gamma': 0.85,
+                'malicious': 0.2,
+                'pho': 0.5,
+                'learn_rate': 0.00005,
+                'batch_size': b,
+                'train': True}
+        workers.append(Process(target=process,
+                               args=(data,),
+                               name=str(data)))
+    return workers
+
+def decay_train_test():
+    print("ep decay train")
+    workers = []
+    for decay in (0.99, 0.995, 0.999, 0.9995, 0.9999, 0.99995, 0.999995, 0.999999):
+        data = {'gamma': 0.85,
+                'malicious': 0.2,
+                'pho': 0.5,
+                'learn_rate': 0.00005,
+                'epsilon_decay': decay,
+                'train': True}
+        workers.append(Process(target=process,
+                               args=(data,),
+                               name=str(data)))
     return workers
 
 def worker_train_test():
@@ -57,17 +101,19 @@ def sensor_train_test():
 def sensor_worker_train():
     print("sensor_worker_train_test")
     workers = []
-    for worker in [10000]:
-        for sensor in [200, 500, 1000, 2000, 5000, 10000]:
-            for gamma in [0.8, 0.9]:
-                data = {'sensor_number': sensor,
-                        'worker_number': worker,
-                        'gamma': gamma,
-                        'learn_rate': 0.00005,
-                        'train': True}
-                workers.append(Process(target=process,
-                                       args=(data,),
-                                       name=str(data)))
+    for sensor in [20000]:
+        for worker in [0, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000]:
+            data = {'sensor_number': sensor,
+                    'worker_number': worker,
+                    'gamma': 0.85,
+                    'malicious': 0.2,
+                    'pho': 0.5,
+                    'learn_rate': 0.00005,
+                    'max_episode': 500,
+                    'train': True}
+            workers.append(Process(target=process,
+                                   args=(data,),
+                                   name=str(data)))
     return workers
 def reduce_rate_test():
     workers = []
@@ -373,9 +419,9 @@ if __name__ == '__main__':
 
     # workers.extend(reduce_rate_test())
     # workers.extend(random_test())
-    workers.extend(pho_test())
-    workers.extend(reduce_rate_test())
-    # workers.extend(mali_rate_test())
+    workers.extend(sensor_worker_train())
+    # workers.extend(decay_train_test())
+    # workers.extend(learn_train_test())
     # workers.extend(gamma_train_test())
     # workers.extend(worker_repeat_train())
     # workers.extend(gamma_train_test())
@@ -383,7 +429,7 @@ if __name__ == '__main__':
     for worker in workers:
         worker.daemon = True
 
-    pool_number = 36
+    pool_number = 16
 
     running = []
     wait_for_running = workers.copy()

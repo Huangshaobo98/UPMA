@@ -243,7 +243,7 @@ class Environment:
                                 pho=pho)
                          for i in range(worker_number)]
 
-        cleaner.free_memory()
+        cleaner.free_memory(worker_number)
         # sensor_x, sensor_y = Sensor.get_all_locations()
         # Persistent.save_network_model(g.cell_length, self.__cell_limit, np.stack([sensor_x, sensor_y]))
 
@@ -565,8 +565,10 @@ class Environment:
                 cell.episode_clear()
         np.random.seed(self.__episode)
         malicious = np.random.random(size=(10357,)) < self.mali_rate
+        np.random.seed(self.__episode)
+        random_samples = np.random.choice(list(range(10357)), 3, replace=False)
         for idx, work in enumerate(self.__worker):
-            work.episode_clear(malicious[idx])
+            work.episode_clear(malicious[idx], self.cleaner.worker_position[idx])
         self.__uav.clear()
         self.__episode_real_aoi.clear()
         self.__episode_observation_aoi.clear()

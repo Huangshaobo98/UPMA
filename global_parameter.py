@@ -41,16 +41,16 @@ class Global:
     default_max_episode = 500      # 最大训练episode
     # default_max_slot = 3000         # 最大时隙
     default_batch_size = 256        # 批大小
-    default_learn_rate = 0.0001     # 学习率
-    default_gamma = 0.9                # 折扣系数
+    default_learn_rate = 0.00005     # 学习率
+    default_gamma = 0.85                # 折扣系数
     default_epsilon_decay = 0.99999     # 探索率衰减
     default_detail_log = False
     default_compare = False
-    default_malicious = 0.15
+    default_malicious = 0.2
     default_assignment_aoi_reduce_rate = 0.875
     default_test_episode = 250
     default_windows_length = 10
-    default_pho = 0.7
+    default_pho = 0.5
     default_random_assignment = False
     # 持久化参数
     default_train = True
@@ -67,4 +67,4 @@ class Global:
     @staticmethod
     def energy_reward_calculate(x):
         return - 2 * exp(Global.energy_reward_coefficient * x) \
-                                        / (1 + exp(Global.energy_reward_coefficient * x))
+                                / (1 + exp(Global.energy_reward_coefficient * x))

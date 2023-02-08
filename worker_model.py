@@ -132,10 +132,11 @@ class Worker(WorkerBase):
         # self._success_cnt = 0
         # self._fail_cnt = 0
 
-    def episode_clear(self, malicious: bool):
+    def episode_clear(self, malicious: bool, positions:dict):
         super(Worker, self).clear()
 
         self.malicious = malicious
+        self._work_position = positions
         self._honest = 1.0 if not malicious else 0.0
         self._direct_trust = self.initial_trust
         self._direct_trust_fresh = False
@@ -144,7 +145,6 @@ class Worker(WorkerBase):
         self._direct_trust_success = []
         self._direct_trust_fail = []
         self._direct_limit = 10
-
 
         self._recom_trust = self.initial_trust
         self._recom_trust_fresh = False
