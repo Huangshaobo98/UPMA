@@ -15,6 +15,7 @@ class State:
     y_limit = -1
     onehot_position = g.onehot_position
     sensor_number = 0
+    uav_energy = g.uav_energy
     # second_per_slot = g.sec_per_slot
 
     def __init__(self,
@@ -33,9 +34,10 @@ class State:
         self.__charge = charge
 
     @staticmethod
-    def init(sensor_number, cell_size):
+    def init(sensor_number, cell_size, max_energy):
         State.sensor_number = sensor_number
         [State.x_limit, State.y_limit] = cell_size
+        State.uav_energy = max_energy
 
     @property
     def real_aoi(self) -> np.ndarray:
@@ -46,8 +48,8 @@ class State:
         return self.real_aoi / State.sensor_number #/ State.second_per_slot  #
 
     @property
-    def average_real_aoi_state(self) -> float:
-        return np.sum(self.real_aoi_state) / State.sensor_number
+    def average_real_aoi_state(self):
+        return np.sum(self.real_aoi_state)
 
     @property
     def observation_aoi(self) -> np.ndarray:
@@ -58,8 +60,8 @@ class State:
         return self.observation_aoi / State.sensor_number  # / State.second_per_slot  #
 
     @property
-    def average_observation_aoi_state(self) -> float:
-        return np.sum(self.observation_aoi_state) / State.sensor_number
+    def average_observation_aoi_state(self):
+        return np.sum(self.observation_aoi_state)
 
     @property
     def energy(self) -> float:
@@ -67,7 +69,7 @@ class State:
 
     @property
     def energy_state(self) -> np.ndarray:
-        return np.array([self.energy / g.uav_energy], dtype=np.float64)
+        return np.array([self.energy / State.uav_energy], dtype=np.float64)
 
     @property
     def charge(self) -> bool:
@@ -109,11 +111,11 @@ class State:
 
 class DQNAgent:
     def __init__(self, cell_size, action_size, gamma=0.75, epsilon=1, epsilon_decay=0.99995,
-                 epsilon_min=0.0, lr=0.0005, dueling=True, train=True, continue_train=False, model_path=""):
+                 epsilon_min=0.05, lr=0.0005, dueling=True, train=True, continue_train=False, model_path=""):
         # 暂且设定的动作集合：'h': 六个方向的单元移动+一种什么都不做的悬浮，在特定小区的悬浮可以看做是进行了充电操作
         [self.x_size, self.y_size] = cell_size
         self.action_size = action_size
-        self.memory = deque(maxlen=30000)  # 创建双端队列
+        self.memory = deque(maxlen=50000)  # 创建双端队列
         self.gamma = gamma  # discount rate
         self.epsilon = epsilon  # exploration rate
         self.epsilon_min = epsilon_min
@@ -161,17 +163,28 @@ class DQNAgent:
         combined = K.concatenate([x.output, y.output, z.output, q.output])
 
         # model.add(Dense(128, input_dim=self.state_size, activation='relu'))
-        o = Dense(512, activation='relu')(combined)
+        if self.x_size * self.y_size < 64:
+            o = Dense(64, activation='relu')(combined)
+            o = Dense(64, activation='relu')(o)
+            o = Dense(64, activation='relu')(o)
+        elif self.x_size * self.y_size < 100 and self.x_size * self.y_size >= 64:
+            o = Dense(96, activation='relu')(combined)
+            o = Dense(96, activation='relu')(o)
+            o = Dense(96, activation='relu')(o)
+        else:
+            o = Dense(128, activation='relu')(combined)
+            o = Dense(128, activation='relu')(o)
+            o = Dense(128, activation='relu')(o)
         # o = Dropout(0.2)(o)
-        o = Dense(256, activation='relu')(o)
+
         # o = Dropout(0.2)(o)
-        o = Dense(256, activation='relu')(o)
+        # o = Dense(64, activation='relu')(o)
         # o = Dropout(0.2)(o)
-        o = Dense(64, activation='relu')(o)
+        # o = Dense(64, activation='relu')(o)
         # o = Dropout(0.2)(o)
         # o = Dense(64, activation='relu')(o)
         # o = Dense(128, activation='relu')(o)
-        o = Dense(64, activation='relu')(o)
+
         # o = Dropout(0.2)(o)
         if dueling:
             o = Dense(self.action_size + 1, activation='linear')(o)
@@ -258,7 +271,7 @@ class DQNAgent:
         minibatch = np.array(random.sample(self.memory, batch_size), dtype=object)
         prev_state_stack, next_state_stack, action_stack, reward_stack, done_stack = self.__batch_stack(minibatch)
 
-        next_targets = self.model.predict(next_state_stack, batch_size=batch_size, verbose=0)
+        next_targets = self.target_model.predict(next_state_stack, batch_size=batch_size, verbose=0)
 
         targets = self.model.predict(prev_state_stack, batch_size=batch_size, verbose=0)
 
@@ -269,6 +282,8 @@ class DQNAgent:
 
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
+        else:
+            self.epsilon *= (1-( (1-self.epsilon_decay)/2 ))    # decay已经较小时，放慢edecay速率
 
     def load(self, name):
         self.model.load_weights(name)

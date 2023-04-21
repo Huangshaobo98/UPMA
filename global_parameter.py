@@ -48,10 +48,16 @@ class Global:
     default_compare = False
     default_malicious = 0.2
     default_assignment_aoi_reduce_rate = 0.875
-    default_test_episode = 250
+    default_cost_limit = 2000
+    default_test_episode = 100
     default_windows_length = 10
     default_pho = 0.5
+    default_basic_reward_for_worker = 1
+    default_max_bid_for_worker = 0.5
+
+
     default_random_assignment = False
+    default_task_assignment_policy = 'greedy' # 'g-greedy', 'random', 'genetic'
     # 持久化参数
     default_train = True
     default_continue_train = False

@@ -11,13 +11,18 @@ from data.data_clean import DataCleaner
 
 
 class MobilePolicy:
-    __hexagon_policy = [[0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 0], [0, 0]]
+    __hexagon_policy_1 = [[0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 0], [0, 0]]
+    __hexagon_policy_0 = [[-1, -1], [0, -1], [1, 0], [0, 1], [-1, 1], [-1, 0], [0, 0]]
+
     # __grid_policy = [[0, 1], [1, 0], [-1, 0], [0, -1], [0, 0]]
 
     # 蜂窝小区随机动作模型
     @staticmethod
-    def hexagon_policy():
-        return choice(MobilePolicy.__hexagon_policy)
+    def hexagon_policy(current_y):
+        if current_y % 2 == 0:
+            return choice(MobilePolicy.__hexagon_policy_0)
+        else:
+            return choice(MobilePolicy.__hexagon_policy_1)
 
     # # 格点小区随机动作模型
     # @staticmethod
@@ -28,18 +33,22 @@ class MobilePolicy:
     @staticmethod
     def get_action(index: int,
                    # map_style: str
+                   current_y: int
                    ):
+        if current_y % 2 == 0:
+            return MobilePolicy.__hexagon_policy_0[index]
+        else:
+            return MobilePolicy.__hexagon_policy_1[index]
         # if map_style == 'h':
-        return MobilePolicy.__hexagon_policy[index]
         # elif map_style == 'g':
         #     return MobilePolicy.__grid_policy[index]
         # else:
         #     assert False
 
     @staticmethod
-    def random_choice(map_style: str):
+    def random_choice(current_y):
         # if map_style == 'h':
-        return MobilePolicy.hexagon_policy()
+        return MobilePolicy.hexagon_policy(current_y)
         # elif map_style == 'g':
         #     return MobilePolicy.grid_policy()
         # else:
@@ -105,7 +114,9 @@ class Worker(WorkerBase):
                  malicious: bool = False,
                  direct_window: int = 10,
                  recom_window: int = 20,
-                 pho: float = 0.7
+                 pho: float = 0.7,
+                 basic_reward: float = g.default_basic_reward_for_worker,
+                 max_bid: float = g.default_max_bid_for_worker,
                  ):
         super(Worker, self).__init__(worker_initial_trust)
         self._id = index
@@ -123,7 +134,7 @@ class Worker(WorkerBase):
         self._direct_limit = direct_window
 
         self._weight = pho
-
+        self._basic_reward = basic_reward
         self._recom_trust = self.initial_trust
         self._recom_trust_fresh = False
         self._recom_trust_list = []
@@ -131,6 +142,21 @@ class Worker(WorkerBase):
         self._recom_limit = recom_window
         # self._success_cnt = 0
         # self._fail_cnt = 0
+
+        self.max_bid = max_bid
+        self._bid = np.random.rand() * self.max_bid
+
+    def bid_refresh(self):
+        self._bid = np.random.rand() * self.max_bid
+
+    @property
+    def bid(self):
+        return self._bid
+
+    @property
+    def total_reward(self):
+        return self._bid + self._basic_reward
+
 
     def episode_clear(self, malicious: bool, positions:dict):
         super(Worker, self).clear()
@@ -254,11 +280,11 @@ class Worker(WorkerBase):
 
 
 class UAV(WorkerBase):
-    def __init__(self, cell_limit):
+    def __init__(self, cell_limit, max_energy):
         super(UAV, self).__init__(1.0)
         [self.__x, self.__y] = [self.__x_start, self.__y_start] = g.uav_start_location
-        self.__max_energy = g.uav_energy
-        self.__energy = g.uav_energy
+        self.__max_energy = max_energy
+        self.__energy = max_energy
         [self.__x_limit, self.__y_limit] = cell_limit
         # self.__charge_cells = g.charge_cells                 # 可充电小区
         # self.__sec_per_slot = g.sec_per_slot                 # 每个时隙代表多少秒

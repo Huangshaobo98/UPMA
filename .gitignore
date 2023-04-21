@@ -9,6 +9,7 @@
 /figure/
 /save*
 /backup/
+copy
 *.zip
 *.jpg
 *.npy

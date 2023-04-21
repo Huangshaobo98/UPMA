@@ -1,5 +1,6 @@
 # dataset clean
 from math import sqrt, pi, ceil, inf
+from typing import List
 import os
 import json
 from zipfile import ZipFile
@@ -10,27 +11,33 @@ import math
 from numpy import random
 
 class DataCleaner:
-    earth_radian_coefficient = pi * 6371393 / 180
-
+    earth_radian_coefficient = pi * 6371393 / 180   # 用于地面坐标系到meter的转换，不用的话应该要换成下面的basic_cofficient
     def __init__(self,
-                 read_thread=8,
+                 read_thread=2,
                  x_limit=10,
                  y_limit=10,
-                 x_range=[116.15, 116.64],
+                 x_range=[116.15, 116.64],  # 可以是角度，也可以是距离
                  y_range=[39.72, 40.095],
                  uav_speed=15,
                  sen_number=20000,
-                 prop_1 = 3,    # dB
-                 prop_2 = 23,   # dB
-                 Pt = 21,       # dBm
-                 N0 = -50,     # dBm
-                 Height = 50,
-                 Zeta = 11.95,
-                 Pi = 0.14,
-                 fc = 2e9,
-                 band_width = 4 * 1024 * 1024,
-                 msg_size = 4 * 1024 * 1024,
-                 Ptrans = 0.0126):
+                 prop_1=3,    # dB
+                 prop_2=23,   # dB
+                 Pt=21,       # dBm
+                 N0=-50,     # dBm
+                 Height=50,
+                 Zeta=11.95,
+                 Pi=0.14,
+                 fc=2e9,
+                 band_width=4 * 1024 * 1024,
+                 msg_size=4 * 1024 * 1024,
+                 Ptrans=0.0126,
+                 range_is_angle=True, # 很重要的参数，确定是角度的话需要乘以地球系数
+                 Norm=False,
+                 Norm_centers=[],
+                 Norm_centers_ratio=[], # 每一个分布中心所占比率
+                 Norm_sigma=[],       # 正态分布的方差
+                 Norm_gain=[],        # 正态分布系数，用于控制器辐射半径大小
+                 No_data_set_need=False):   # 是否要加载数据集，生成worker，不加载worker自动屏蔽worker_sec的生成
 
         current_work_path = os.path.split(os.path.realpath(__file__))[0]
         data_set_json_path = current_work_path + '/data_set.json'
@@ -39,40 +46,51 @@ class DataCleaner:
         if not os.path.exists(sub_dir):
             os.makedirs(sub_dir)
 
-        with open(data_set_json_path, 'r') as file:
-            json_file = json.load(file)
+        self.No_data_set_need = No_data_set_need
 
+        if not self.No_data_set_need:
+            with open(data_set_json_path, 'r') as file:
+                json_file = json.load(file)
+        else:
+            json_file = {}
         self.__x_limit = x_limit
         self.__y_limit = y_limit
         self.__x_range = x_range
         self.__y_range = y_range
         self.__uav_speed = uav_speed
         self.__sensor_number = sen_number
-
+        self.Range_is_angle = range_is_angle
+        self.Norm = Norm      # 传感器节点的分布小区是否要服从正态分布
+        self.__norm_center = Norm_centers   # 若是正态分布，则需要将那些点作为正态分布中心点
+        self.__norm_center_ratio = Norm_centers_ratio  # 每一个分布中心所占比率
+        self.__norm_sigma = Norm_sigma                 # 正态分布的方差
+        self.__norm_gain = Norm_gain                   # 正态分布的辐射半径
         self.__K0 = (4 * math.pi * fc / 299792458) ** (-Zeta)
         self.__prob_los = lambda d : 1 / (1 + Zeta * math.exp(-Pi * (180 / math.pi / math.sin(Height / math.sqrt(Height**2 + d**2)) - Zeta)))
         self.__prob_avg = lambda d : 1 / (10 ** prop_1) * self.__prob_los(d) + 1 / (10 ** prop_2) * (1 - self.__prob_los(d))
         self.__Ki = lambda d : self.__prob_avg(d) * self.__K0 * d ** (-Zeta)
         self.__SNR = Pt - N0 # dB
         self.__bit_rate = lambda d : band_width * math.log2(1 + 10 ** self.__SNR * self.__Ki(d))
-        self.__energy_consume = lambda x, y : Ptrans * msg_size * 8 / self.__bit_rate(sqrt((x * DataCleaner.earth_radian_coefficient)**2 + (y * DataCleaner.earth_radian_coefficient)**2))
+        if self.Range_is_angle:
+            self.__energy_consume = lambda x, y : Ptrans * msg_size * 8 / self.__bit_rate(sqrt((x * DataCleaner.earth_radian_coefficient)**2 + (y * DataCleaner.earth_radian_coefficient)**2))
+        else:
+            self.__energy_consume = lambda x, y : Ptrans * msg_size * 8 / self.__bit_rate(sqrt(x**2 + y**2))
         self.__msg_size = msg_size
-        self.__file_number = json_file['number']
-        self.__prefix = json_file['prefix']
-        self.__suffix = json_file['suffix']
-        self.__pack_path = current_work_path + '/' + json_file['name']
-        self.__unpack_directory = self.__pack_path[:self.__pack_path.find('.')] + '/'
-        self.__data_directory = self.__unpack_directory + json_file['data_directory'] + '/'
+        self.__file_number = json_file.get('number', 0)
+        self.__prefix = json_file.get('prefix', '')
+        self.__suffix = json_file.get('suffix', '')
+        self.__pack_path = (current_work_path + '/' + json_file.get('name', '')) if not No_data_set_need else ''
+        self.__unpack_directory = (self.__pack_path[:self.__pack_path.find('.')] + '/') if not No_data_set_need else ''
+        self.__data_directory = (self.__unpack_directory + json_file.get('data_directory', '') + '/') if not No_data_set_need else ''
 
         self.__coordinate_directory = current_work_path + "/coordinate"
         self.__coordinate_path = self.__coordinate_directory + '.npy'
 
-        self.__info_json_path = sub_dir + '/' + json_file['name'][:json_file['name'].find('.')] + '.json'
+        self.__info_json_path = (sub_dir + '/' + json_file['name'][:json_file['name'].find('.')] + '.json') if not No_data_set_need else (sub_dir + '/data.json')
 
-
-        self.__coordinate = np.empty(shape=(0, 2))
-        self.__worker_position = np.empty(shape=(self.__file_number,), dtype=dict)
-        self.__cell_coordinate = np.empty(shape=(x_limit, y_limit), dtype=np.ndarray)
+        self.__coordinate = np.empty(shape=(0, 2))                                      # worker节点的坐标点
+        self.__worker_position = np.empty(shape=(self.__file_number,), dtype=dict)      # 每一个时隙worker的坐标点
+        self.__cell_coordinate = np.empty(shape=(x_limit, y_limit), dtype=np.ndarray)   # 小区坐标点，保存在x * y的矩阵中
 
         self.__sensor_cell = np.empty(shape=(0, 2))
         self.__sensor_diff = np.empty(shape=(0, 2))
@@ -86,7 +104,8 @@ class DataCleaner:
         self.__read_number = ceil(self.__file_number / self.__thread_number)
 
         # self.__io_worker = ThreadPoolExecutor(max_workers=self.__thread_number)
-        self.check_unpack()
+        if not self.No_data_set_need:
+            self.check_unpack()
         self.__info_json = self.read_info_json()
         self.__worker_position_directory = sub_dir + '/worker_sec_' + str(self.second_per_slot)
         self.__worker_position_path = self.__worker_position_directory + '.npy'
@@ -94,18 +113,22 @@ class DataCleaner:
         self.__cell_coordinate_directory = sub_dir + '/cell_coordinate'
         self.__cell_coordinate_path = self.__cell_coordinate_directory + '.npy'
 
-        self.__sensor_cell_directory = sub_dir + '/sensor_cell_coordinate_sen_' + str(sen_number)
+        sensor_description = self.sensor_description()
+        self.__sensor_cell_directory = sub_dir + '/sensor_cell_coordinate_' + sensor_description
         self.__sensor_cell_path = self.__sensor_cell_directory + '.npy'
 
-        self.__sensor_diff_directory = sub_dir + '/sensor_diff_coordinate_sen_' + str(sen_number)
+        self.__sensor_diff_directory = sub_dir + '/sensor_diff_coordinate_' + sensor_description
         self.__sensor_diff_path = self.__sensor_diff_directory + '.npy'
 
         # self.__coordinate = self.read_coordinate() # 全加载进来对性能开销太大了，画图的时候再打开
-        self.__cell_coordinate = self.read_cell_coordinate()
-        self.__worker_position = self.read_worker_position()       # 读取已经存储好的info_json，如果没有，则创建，并导入信息
-        self.__sensor_cell = self.read_sensor_cell()
-        self.__sensor_diff = self.read_sensor_diff()
-
+        self.__cell_coordinate = self.read_cell_coordinate()           # 读取小区中心点位置
+        if not self.No_data_set_need:
+            self.__worker_position = self.read_worker_position()       # 不需要数据集的情况就不要导入了
+        if not self.Norm:     # 均匀分布情况下按照小区划分，在按照与中心点的diff划分
+            self.__sensor_cell = self.read_sensor_cell()
+            self.__sensor_diff = self.read_sensor_diff()
+        else:                   # 不均匀情况按照在区域内随机撒点的形式进行生成
+            self.__sensor_cell, self.__sensor_diff = self.read_sensor_cell_and_diff_norm()
         # self.plot_scatters()
 
     def set_worker_number(self, worker_number):
@@ -118,6 +141,16 @@ class DataCleaner:
         self.__cell_coordinate = None
         self.__sensor_cell = None
         self.__sensor_diff = None
+
+
+    def sensor_description(self):
+        ret = ''
+        if self.Norm:
+            assert len(self.__norm_center) == len(self.__norm_center_ratio) == len(self.__norm_sigma) == len(self.__norm_gain)
+            for xy, r, s, g in zip(self.__norm_center, self.__norm_center_ratio, self.__norm_sigma, self.__norm_gain):
+                ret += ('x' + str(xy[0]) + 'y' + str(xy[1]) + 'r' + str(r) + 's' + str(s) + 'g' + str(g) + '_')
+        ret += ('sen_' + str(self.sensor_number))
+        return ret
 
     def bit_rate(self, ground_distance: float):
         return self.__bit_rate(ground_distance)
@@ -145,7 +178,7 @@ class DataCleaner:
             print("Worker coordinate data found, load from {}".format(self.__worker_position_path))
             return np.load(self.__worker_position_path, allow_pickle=True)
         print("Not found worker coordinate file, begin generate from dataset")
-        info_json = self.read_info_json()
+        info_json = self.info_json
         tasks = [Thread(target=self.task_read_worker_position, args=(i, info_json))
                  for i in range(self.__thread_number)]
         for task in tasks:
@@ -155,6 +188,37 @@ class DataCleaner:
         np.save(self.__worker_position_directory, self.__worker_position)
         print("Save worker coordinate at {}".format(self.__worker_position_path))
         return self.__worker_position
+
+    def read_sensor_cell_and_diff_norm(self):
+        print("Begin read sensor cell in norm distribution".format(str(self.__norm_center)))
+        if os.path.exists(self.__sensor_cell_path) and os.path.exists(self.__sensor_diff_path):
+            print("Sensor cell data found, load from {}".format(self.__sensor_cell_path))
+            print("Sensor diff data found, load from {}".format(self.__sensor_diff_path))
+            return np.load(self.__sensor_cell_path, allow_pickle=True), np.load(self.__sensor_diff_path, allow_pickle=True)
+        cnt = 0
+        center_number = len(self.__norm_center)
+        index = [i for i in range(center_number)]
+        np.random.seed(10)
+        sensor_cell = np.empty(shape=(self.sensor_number, 2), dtype=int)
+        sensor_diff = np.empty(shape=(self.sensor_number, 2), dtype=float)
+        while cnt < self.sensor_number:
+            ind = np.random.choice(index, p=self.__norm_center_ratio)
+            radian = np.random.rand() * 2 * math.pi
+            length = np.random.normal(0, self.__norm_sigma[ind]) * self.__norm_gain[ind]
+            temp_x = self.__norm_center[ind][0] + math.sin(radian) * length
+            temp_y = self.__norm_center[ind][1] + math.cos(radian) * length
+            if temp_x > self.x_range[1] or temp_x < self.x_range[0] or temp_y > self.y_range[1] or temp_y < self.y_range[0]:
+                continue
+            cell_ind = self.nearest_cell(temp_x, temp_y)
+            sensor_cell[cnt] = np.array(cell_ind)
+            cell_diff = np.array([temp_x, temp_y]) - self.__cell_coordinate[cell_ind[0], cell_ind[1]]
+            sensor_diff[cnt] = cell_diff
+            cnt+=1
+            print(cnt)
+        np.save(self.__sensor_cell_directory, sensor_cell)
+        np.save(self.__sensor_diff_directory, sensor_diff)
+        return sensor_cell, sensor_diff
+
 
     def read_sensor_cell(self):
         print("Begin read sensor cell")
@@ -272,8 +336,8 @@ class DataCleaner:
               y.append(self.__cell_coordinate[i,j][1])
 
         plt.figure(figsize=(10, 8), dpi=450)
-
-        plt.scatter(self.worker_coordinate()[:, 0], self.worker_coordinate()[:, 1], c='gray', s=0.1)
+        if not self.No_data_set_need:
+            plt.scatter(self.worker_coordinate()[:, 0], self.worker_coordinate()[:, 1], c='gray', s=0.1)
         plt.scatter(x, y)
         x_range = self.__info_json['x_range']
         y_range = self.__info_json['y_range']
@@ -308,7 +372,7 @@ class DataCleaner:
         for i in range(self.__y_limit):
             for j in range(self.__x_limit):
                 dis = (x_span / 2 if i % 2 else 0)
-                self.__cell_coordinate[i, j] = np.array([self.__x_range[0] + j * x_span + dis,
+                self.__cell_coordinate[j, i] = np.array([self.__x_range[0] + j * x_span + dis,
                                                          self.__y_range[0] + i * y_span])
 
         np.save(self.__cell_coordinate_directory, self.__cell_coordinate)
@@ -334,7 +398,7 @@ class DataCleaner:
         assert self.__x_limit > 1 and self.__y_limit > 1
         side_length = (self.__x_range[1] - self.__x_range[0]) / (self.__x_limit - 0.5) / sqrt(3)
 
-        length_span_cell = side_length * DataCleaner.earth_radian_coefficient * sqrt(3)
+        length_span_cell = side_length * (DataCleaner.earth_radian_coefficient if self.Range_is_angle else 1) * sqrt(3)
         second_per_slot = max(length_span_cell / self.__uav_speed,
                               self.__msg_size * self.__sensor_number / (self.x_limit * self.y_limit)
                               / self.bit_rate(length_span_cell / sqrt(3)))
@@ -350,9 +414,24 @@ class DataCleaner:
             'y_limit': self.__y_limit,
             'uav_speed': self.__uav_speed,
             'msg_size': self.__msg_size,
-            'sensor_number': self.__sensor_number
+            'sensor_number': self.__sensor_number,
+            'angle_or_meter': self.Range_is_angle,    # True is angle
+            # 'norm': self.Norm,                        # 均匀分布还是正态分布
+            # 'norm_center': self.__norm_center,          # norm center的中心，模拟多个热点区域
+            # 'norm_ratio': self.__norm_center_ratio,     # 每一个norm_center所聚集的传感器节点占总节点的比率
+            # 'norm_gain': self.__norm_gain,              # 每一个norm_center所乘以的倍率，用于匹配网络大小
         }
 
+        if not self.No_data_set_need:
+            self.read_min_max_second_of_data_set(info_json, second_per_slot)
+        else:
+            info_json['slot_number'] = 2000
+        with open(self.__info_json_path, "w") as f:
+            json.dump(info_json, f, indent=2)
+
+        return info_json
+
+    def read_min_max_second_of_data_set(self, info_json: dict, sec_per_slot: float):
         # 处理时间信息，寻找车辆记录的起始时间和结束时间
         tasks = [Thread(target=self.task_time_analyze, args=(i,)) for i in range(self.__thread_number)]
         for task in tasks:
@@ -363,12 +442,7 @@ class DataCleaner:
         info_json['min_second'] = self.__min_second
         info_json['max_second'] = self.__max_second
         info_json['slot_number'] = int((info_json['max_second'] - info_json['min_second'] + 1)
-                                       / second_per_slot)
-
-        with open(self.__info_json_path, "w") as f:
-            json.dump(info_json, f, indent=2)
-
-        return info_json
+                                       / sec_per_slot)
 
     # 根据x数量，计算单个小区边长等信息
     def data_clean(self, x_range, y_range, x_number, y_number, uav_speed):
@@ -509,5 +583,29 @@ class DataCleaner:
 
     
 if __name__ == "__main__":
-    cleaner = DataCleaner()
+    # cleaner = DataCleaner(
+    #              x_limit=6,
+    #              y_limit=6,
+    #              x_range=[0, 2000],  # 可以是角度，也可以是距离
+    #              y_range=[0, 1800],
+    #              range_is_angle=False, # 很重要的参数，确定是角度的话需要乘以地球系数
+    #              Norm=False,
+    #              Norm_centers=[],
+    #              Norm_centers_ratio=[], # 每一个分布中心所占比率
+    #              Norm_sigma=[],       # 正态分布的方差
+    #              Norm_gain=[],        # 正态分布系数，用于控制器辐射半径大小
+    #              No_data_set_need=True)
+    cleaner = DataCleaner(
+                 x_limit=10,
+                 y_limit=10,
+                 # x_range=[0, 2000],  # 可以是角度，也可以是距离
+                 # y_range=[0, 1800],
+                 # range_is_angle=True, # 很重要的参数，确定是角度的话需要乘以地球系数
+                 Norm=False,
+                 # Norm_centers=[[500, 600], [1400, 1100]],
+                 # Norm_centers_ratio=[0.4, 0.6], # 每一个分布中心所占比率
+                 # Norm_sigma=[1, 1],       # 正态分布的方差
+                 # Norm_gain=[400, 600],        # 正态分布系数，用于控制器辐射半径大小
+                 # No_data_set_need=False
+                )
     # cleaner.plot_scatters()

@@ -33,6 +33,8 @@ class Persistent:
              continue_train: bool,
              compare: bool,
              compare_method: str = "",
+             task_assignment_method: str = "",
+             no_uav: bool = False,
              directory="",
              suffix="",
              slot_log_save=False):
@@ -40,6 +42,12 @@ class Persistent:
         if not directory == "":
             Persistent.__persistent_directory = directory
 
+        if len(suffix) > 0:
+            suffix = '_' + suffix
+        if len(task_assignment_method) > 0:
+            task_assignment_method = '_' + task_assignment_method
+
+        suffix = suffix + task_assignment_method + ("_no_uav" if no_uav else "")
         Persistent.__train = train
         Persistent.__continue_train = continue_train
 

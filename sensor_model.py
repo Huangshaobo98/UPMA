@@ -36,6 +36,9 @@ class Sensor:
     def __eq__(self, other):
         return id(self) == id(other)
 
+    def __lt__(self, other):
+        return self.index < other.index
+
     @property
     def index(self):
         return self.__id
@@ -48,7 +51,7 @@ class Sensor:
 
     @property
     def cell_index(self):
-        return [self.__cell_x, self.__cell_x]
+        return [self.__cell_x, self.__cell_y]
 
     @property
     def position(self):
@@ -80,6 +83,12 @@ class Sensor:
 
     def add_worker(self, worker: Worker):
         self.__worker_report_list.append(worker)
+
+    def had_worker(self, worker: Worker) -> bool:
+        for wkr in self.__worker_report_list:
+            if id(wkr) == id(worker):
+                return True
+        return False
 
     def episode_clear(self):
         self.__worker_report_list.clear()

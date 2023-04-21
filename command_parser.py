@@ -1,8 +1,9 @@
 from global_parameter import Global as g
 import os
-
+from data.data_clean import DataCleaner
 
 def command_parse(commands,
+                  cleaner: DataCleaner,
                   kwargs: dict = {}):
     command_iter = iter(commands)
     parameters = {
@@ -26,10 +27,15 @@ def command_parse(commands,
         'compare_method': g.default_compare_method,
         'malicious': g.default_malicious,
         'windows_length': g.default_windows_length,
+        'cost_limit': g.default_cost_limit,
         'suffix': "",
         'pho': g.default_pho,
-        'random_assignment': g.default_random_assignment,
-        'reduce_rate': g.default_assignment_aoi_reduce_rate,
+        'task_assignment_policy': g.default_task_assignment_policy,
+        # 'reduce_rate': g.default_assignment_aoi_reduce_rate,
+        'uav_energy': g.uav_energy,     #Wh
+        'basic_reward_for_worker': g.default_basic_reward_for_worker,
+        'max_bid_for_worker': g.default_max_bid_for_worker,
+        'no_uav': False,
         'seed': 0,
     }
     for key, value in kwargs.items():
@@ -111,9 +117,12 @@ def command_parse(commands,
 
 
     if parameters['prefix'] == "":
-        parameters['prefix'] = os.getcwd() + "/save/t-drive" \
-                                + "_sen_" + str(parameters['sensor_number']) \
+        parameters['prefix'] = os.getcwd() + "/save/x_{}_y_{}/".format(cleaner.x_limit, cleaner.y_limit) \
+                                + ("no_dataset/" if cleaner.No_data_set_need else "t-drive/") \
+                                + ("uniform_sensor/" if not cleaner.Norm else "norm_sensor/") \
+                                + "sen_" + str(parameters['sensor_number']) \
                                 + "_wkr_" + str(parameters['worker_number']) \
+                                + "_cst_" + str(parameters['cost_limit']) \
                                 + "_epi_" + str(parameters['max_episode']) \
                                 + "_bat_" + str(parameters['batch_size']) \
                                 + "_lr_" + str(parameters['learn_rate']) \
